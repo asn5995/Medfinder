@@ -3,15 +3,15 @@
 > Give this file to your coding agent and check that it is using these instructions. Keep the stack, commands, and ground rules current.
 
 ## 1. Project Overview
-- **What this repo builds:** [1–2 sentence summary]
-- **Primary user & core workflow:** [See the living PRD in `docs/index.html`]
-- **Tech stack:** [e.g., Python 3.12 / FastAPI / Next.js / SQLite / OpenRouter API]
+- **What this repo builds:** MedFinder, a local page that takes a typed drug and either shows a verified sample equivalent sold in India with a 90-day landed cost, or names the rule that failed.
+- **Primary user & core workflow:** A classmate or friend on a long-term prescription. See the living PRD in `docs/index.html`. The one workflow is prescription drug in, verified Indian equivalent and landed cost out.
+- **Tech stack:** Static HTML and JavaScript in `prototype/`. No install, no server, and no API key. The match is decided by rules in `prototype/match.js`. Photo upload through OpenRouter is the next increment, not this prototype.
 
 ## 2. Commands
-- **Install dependencies:** `[e.g., npm install / uv sync]`
-- **Run locally:** `[e.g., npm run dev]`
-- **Run deterministic tests:** `[e.g., pytest / npm test]`
-- **Run model evals:** `[e.g., python tests/eval.py]`
+- **Install dependencies:** None.
+- **Run locally:** Open `prototype/index.html` in a browser. From the repo root in PowerShell: `start "" "prototype\index.html"`
+- **Run deterministic tests:** On that page, click **Check rules**. Ten cases should pass, including the strength miss, the succinate versus tartrate miss, and the blocked drugs.
+- **Run model evals:** Not used. This prototype does not call a model.
 
 ## 3. Non-Negotiable Engineering Rules
 1. **Plan before coding:** Before touching multiple files, propose a brief plan and wait for approval.
