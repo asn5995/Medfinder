@@ -217,12 +217,56 @@
       <p class="meta">Build on at least two separate days each week outside class, including the November 3 break. Push commits and log actual progress, failures, PRD changes, costs, and hours here. All build deadlines are noon, New York time.</p>
 
       <div class="log-entry">
-        <h3>Build 1 · Intent.md & Throwaway Prototype (Due Nov 9)</h3>
+        <h3>Build 1 · November 8, 2026 (Due Nov 9)</h3>
+        <p><strong>What works / what shipped:</strong> The product page is public at <a href="https://asn5995.github.io/Medfinder/">asn5995.github.io/Medfinder</a>. PRD v1 names one user and one workflow. A local prototype at <code>prototype/index.html</code> takes a typed drug and shows a sample Indian equivalent with a 90-day landed cost, or it names the rule that failed. The prototype runs locally. It does not read a prescription photo, search live sellers, or place an order.</p>
+        <p><strong>Learning:</strong> Not written in my own words yet.</p>
+        <p><strong>Outside user feedback:</strong> None. A specific classmate or friend has not tried this. My own checks are not outside user testing.</p>
+        <p><strong>Analytics:</strong> PostHog is not installed. Installation and event checks stay pending for Build 2.</p>
+        <p><strong>Actual build costs:</strong> No API or hosting spend recorded. Coding-agent token cost is unknown.</p>
+        <p><strong>Actual hours:</strong> Not logged yet.</p>
+      </div>
+
+      <div class="log-entry">
+        <h3>Push 1 · Course template and GitHub Pages</h3>
+        <p class="meta">November 8, 2026 · published the course template commit <code>be0cea4</code> to <code>asn5995/Medfinder</code></p>
         <ul>
-          <li><strong>What shipped:</strong> A local prototype at <code>prototype/index.html</code>. Pick or type a drug. Lipitor 20 mg shows Storvas 20 and a sample $27.00 landed cost. Lipitor 40 mg is rejected for strength. Metoprolol succinate ER is rejected because succinate is not tartrate and extended-release is not immediate-release. Adderall is blocked, with no seller. Check rules passed 10 of 10. Photo upload and live seller search are not built.</li>
-          <li><strong>Things learned with AI:</strong> Not logged yet.</li>
-          <li><strong>What broke / changed in PRD:</strong> v1 still names a classmate or friend, and a specific participant is still pending. The prototype only covers the sample table. It does not read a prescription photo.</li>
-          <li><strong>Cost & time this week:</strong> $0.00 recorded · hours not logged yet</li>
+          <li><strong>What shipped:</strong> Empty repository received the course template. GitHub Pages deploys from <code>main</code> and the <code>/docs</code> folder. The public URL loaded. At that moment the page still had the template placeholders.</li>
+          <li><strong>What changed in the PRD:</strong> Nothing yet. The living PRD was still blank.</li>
+          <li><strong>Check:</strong> The Pages build finished and the site returned the template title.</li>
+        </ul>
+      </div>
+
+      <div class="log-entry">
+        <h3>Push 2 · PRD v1</h3>
+        <p class="meta">November 8, 2026 · <code>6c17789</code> · Fill the product page with MedFinder PRD v1</p>
+        <ul>
+          <li><strong>What shipped:</strong> The page is named MedFinder. The user is a classmate or friend on a long-term prescription, such as cholesterol, thyroid, or blood pressure medicine, who pays a high US pharmacy price. A specific participant and testing session are still pending.</li>
+          <li><strong>Before:</strong> They pay the US price or ask someone in India to buy it, then cannot tell whether a different brand is the same ingredient, salt, strength, and release type.</li>
+          <li><strong>After, as specified:</strong> Type or upload the drug and see one verified Indian equivalent plus a landed cost. Ordering stays outside the app.</li>
+          <li><strong>One workflow:</strong> Prescription in, verified Indian equivalent and landed cost out.</li>
+          <li><strong>Three non-goals:</strong> No in-app ordering or payments. No controlled substances, injectables, biologics, or refrigerated drugs. No country other than India, and no medical advice.</li>
+          <li><strong>What changed in the PRD:</strong> v1 replaced the template blanks. The prototype did not exist yet, so the page said the local demo was not built.</li>
+        </ul>
+      </div>
+
+      <div class="log-entry">
+        <h3>Push 3 · Local prototype</h3>
+        <p class="meta">November 8, 2026 · <code>b8b0a79</code> · Add the local MedFinder prototype and how to run it</p>
+        <ul>
+          <li><strong>What shipped:</strong> <code>prototype/index.html</code>, <code>prototype/catalog.js</code>, <code>prototype/match.js</code>, and run notes in <code>AGENTS.md</code>. Open the HTML file in a browser. No install and no API key.</li>
+          <li><strong>How a match is decided:</strong> Ordinary rules, not a model. Ingredient, salt form, strength, dosage form, and release type must all agree. Prices are a sample catalog, not a live pharmacy.</li>
+          <li><strong>Browser checks:</strong> Lipitor 20 mg tablet, immediate-release, matched Storvas 20 and showed a sample 90-day landed cost of $27.00. Synthroid 50 mcg matched Eltroxin 50 mcg at a sample $24.00. Lipitor 40 mg was rejected because 40 mg is not 20 mg, and no price was shown. Metoprolol succinate extended-release was rejected because succinate is not tartrate and extended-release is not immediate-release. Adderall was blocked and showed no seller. Typed ibuprofen said it is not in the sample table. Check rules passed 10 of 10. Recorded on a desktop-width page. A narrower window still showed the form. This was not a phone test.</li>
+          <li><strong>What stayed out:</strong> Prescription photo upload, live seller search, accounts, refill alerts, and checkout.</li>
+        </ul>
+      </div>
+
+      <div class="log-entry">
+        <h3>Push 4 · Prototype evidence on the product page</h3>
+        <p class="meta">November 8, 2026 · <code>c0f9127</code> · Show the local prototype on the product page</p>
+        <ul>
+          <li><strong>What shipped:</strong> The product page now includes the November 8 screenshot of the Lipitor 20 mg result and a Build 1 note that the prototype exists. The screenshot states the $27.00 figure is a sample landed cost.</li>
+          <li><strong>What changed in the PRD:</strong> The “after” workflow now says the local prototype types or picks a drug. Photo upload is still not built. The user line is unchanged, and a real testing session is still pending.</li>
+          <li><strong>Check:</strong> The screenshot file loaded on the product page.</li>
         </ul>
       </div>
 
