@@ -157,11 +157,14 @@
     <section id="live-demo">
       <h2>Product Showcase (Prototype / Live App / 2-Min Video)</h2>
       <p>
-        <strong>Current Status:</strong> Build 1 concept. PRD v1 is written. A local prototype is not built yet.<br />
-        <strong>Demo:</strong> No screenshot yet. The app can stay local through Week 4. A cloud URL comes in Build 5.
+        <strong>Current Status:</strong> Build 1 local prototype. Open <code>prototype/index.html</code> in a browser. No install and no API key.<br />
+        <strong>Demo:</strong> Screenshot below, November 8, 2026. Lipitor 20 mg tablet, immediate-release, matches sample listing Storvas 20. The illustrated 90-day landed cost is $27.00. The app can stay local through Week 4. A cloud URL comes in Build 5.
+      </p>
+      <p>
+        <img src="prototype-match.png" alt="MedFinder local prototype. Lipitor 20 mg matches Storvas 20, atorvastatin calcium, with a sample 90-day landed cost of $27.00." style="width: 100%; border: 1px solid var(--border); border-radius: 8px;" />
       </p>
       <p class="meta">
-        Ask your coding agent to embed a screenshot or GIF of your local prototype for Build 1. Keep this evidence current, then add your cloud app link and two-minute video in Build 5.
+        Prices in the screenshot are sample catalog numbers, not a live pharmacy. Photo upload is not built yet.
       </p>
     </section>
 
@@ -173,7 +176,7 @@
       <h3>1. Target User & The Job to Be Done</h3>
       <p><strong>Who is this for?</strong> A classmate or friend on a long-term prescription (for example cholesterol, thyroid, or blood pressure medicine) who pays a high price at a US pharmacy and wants to know whether the same medicine is sold for less in India. A specific participant and testing session are pending.</p>
       <p><strong>The painful "Before" workflow:</strong> They leave the pharmacy with a brand name, pay the US price, or ask someone in India to buy it. They search the brand, find a different name, and cannot tell whether the ingredient, salt form, strength, and release type are the same. They message a chemist or try a website without knowing whether the seller is legitimate.</p>
-      <p><strong>The "After" workflow with this product:</strong> Intended experience, not built yet. They upload a photo of the prescription or type the drug, confirm what the app read, and see one verified Indian equivalent plus a landed cost. A match counts only when the ingredient, salt form, strength, dosage form, and release type all agree. The screen says to confirm with a pharmacist before switching. Ordering stays on the seller’s site.</p>
+      <p><strong>The "After" workflow with this product:</strong> In the local prototype, they type the drug or pick an example and see one verified Indian equivalent plus a sample landed cost. A match counts only when the ingredient, salt form, strength, dosage form, and release type all agree. The screen says to confirm with a pharmacist before switching. Photo upload is not built yet. Ordering stays outside the app.</p>
 
       <h3>2. Scope & Explicit Non-Goals</h3>
       <ul>
@@ -216,9 +219,9 @@
       <div class="log-entry">
         <h3>Build 1 · Intent.md & Throwaway Prototype (Due Nov 9)</h3>
         <ul>
-          <li><strong>What shipped:</strong> Public product page and PRD v1 for MedFinder. The core workflow is specified. A local prototype and screenshot are not built yet.</li>
+          <li><strong>What shipped:</strong> A local prototype at <code>prototype/index.html</code>. Pick or type a drug. Lipitor 20 mg shows Storvas 20 and a sample $27.00 landed cost. Lipitor 40 mg is rejected for strength. Metoprolol succinate ER is rejected because succinate is not tartrate and extended-release is not immediate-release. Adderall is blocked, with no seller. Check rules passed 10 of 10. Photo upload and live seller search are not built.</li>
           <li><strong>Things learned with AI:</strong> Not logged yet.</li>
-          <li><strong>What broke / changed in PRD:</strong> v1 names a reachable type of person (a classmate or friend on a long-term prescription) and states that a specific participant is still pending. The one workflow is prescription in, verified Indian equivalent and landed cost out. Refill alerts, in-app checkout, and other countries are out of this version.</li>
+          <li><strong>What broke / changed in PRD:</strong> v1 still names a classmate or friend, and a specific participant is still pending. The prototype only covers the sample table. It does not read a prescription photo.</li>
           <li><strong>Cost & time this week:</strong> $0.00 recorded · hours not logged yet</li>
         </ul>
       </div>
