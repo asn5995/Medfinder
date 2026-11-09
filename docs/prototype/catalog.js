@@ -61,6 +61,7 @@ window.MEDFINDER_PRODUCTS = [
     packCount: 30,
     packPriceCents: 400,
     shippingCents: 1500,
+    us90DayCents: 24900,
     unitsPerDay: 1
   },
   {
@@ -75,6 +76,7 @@ window.MEDFINDER_PRODUCTS = [
     packCount: 30,
     packPriceCents: 300,
     shippingCents: 1500,
+    us90DayCents: 8700,
     unitsPerDay: 1
   },
   {
@@ -89,6 +91,7 @@ window.MEDFINDER_PRODUCTS = [
     packCount: 20,
     packPriceCents: 200,
     shippingCents: 1500,
+    us90DayCents: 1500,
     unitsPerDay: 1
   },
   {
@@ -103,6 +106,7 @@ window.MEDFINDER_PRODUCTS = [
     packCount: 10,
     packPriceCents: 150,
     shippingCents: 1500,
+    us90DayCents: 4200,
     unitsPerDay: 1
   }
 ];

@@ -178,7 +178,6 @@
 
     <section id="output" hidden>
       <div id="result" class="result" aria-live="polite"></div>
-      <p class="disclaimer" id="disclaimer"></p>
     </section>
 
     <section>
@@ -195,9 +194,6 @@
     var form = document.getElementById("lookup");
     var output = document.getElementById("output");
     var resultBox = document.getElementById("result");
-    var disclaimer = document.getElementById("disclaimer");
-
-    var DISCLAIMER = "Sample prices, not a live pharmacy listing. Confirm the ingredient, salt form, strength, and release type with a pharmacist before switching. This is not medical advice, and this page does not place an order.";
 
     function fieldValue(id) {
       return document.getElementById(id).value;
@@ -213,7 +209,6 @@
     function renderResult(result) {
       output.hidden = false;
       resultBox.className = "result " + result.status;
-      disclaimer.textContent = DISCLAIMER;
 
       if (result.status === "exact") {
         var cost = result.cost;
@@ -225,9 +220,10 @@
             "<p><strong>" + product.brand + "</strong> · " + product.manufacturer + "</p>" +
             "<p>" + product.ingredient + " " + product.salt + ", " +
               window.MedFinder.formatStrength(product.strength) + " " + product.form + ", " + product.release + "</p>" +
-            "<p>Sample pack: " + product.packCount + " units at " + window.MedFinder.money(product.packPriceCents) + "</p>" +
-            "<p>Sample shipping: " + window.MedFinder.money(cost.shippingCents) + "</p>" +
+            "<p>Pack: " + product.packCount + " units at " + window.MedFinder.money(product.packPriceCents) + "</p>" +
+            "<p>Shipping: " + window.MedFinder.money(cost.shippingCents) + "</p>" +
             "<p>90 days at " + cost.unitsPerDay + " unit a day = " + cost.units + " units, so " + cost.packs + " packs.</p>" +
+            "<p class='landed'>US price " + window.MedFinder.money(product.us90DayCents) + "</p>" +
             "<p class='landed'>Landed cost " + window.MedFinder.money(cost.landedCents) + "</p>" +
           "</div>";
         return;
@@ -237,7 +233,7 @@
         resultBox.innerHTML =
           "<h2>Not a match</h2>" +
           "<p>" + result.message + "</p>" +
-          "<p>No price is shown. The closest sample listing is " + result.product.brand + ".</p>";
+          "<p>No price is shown. The closest listing is " + result.product.brand + ".</p>";
         return;
       }
 
