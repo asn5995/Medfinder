@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MedFinder prototype</title>
+  <style>
+    :root {
+      --bg: #fafafa;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #4b5563;
+      --border: #e5e7eb;
+      --accent: #1d63dc;
+      --exact: #166534;
+      --exact-bg: #f0fdf4;
+      --reject: #92400e;
+      --reject-bg: #fffbeb;
+      --blocked: #991b1b;
+      --blocked-bg: #fef2f2;
+      --unknown: #374151;
+      --unknown-bg: #f3f4f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .wrap {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+    h1 {
+      font-size: 32px;
+      letter-spacing: -0.02em;
+      margin: 0 0 8px;
+    }
+    h2 { font-size: 18px; margin: 0 0 12px; }
+    p { margin: 0 0 12px; }
+    .lede { color: var(--muted); margin-bottom: 20px; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .examples { display: flex; flex-wrap: wrap; gap: 8px; }
+    button, select, input {
+      font: inherit;
+    }
+    button {
+      border: 1px solid var(--border);
+      background: var(--card);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .fields {
+      display: grid;
+      grid-template-columns: 1.4fr 0.8fr 0.8fr 0.6fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    input, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: white;
+    }
+    .result {
+      border-radius: 10px;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+    }
+    .result.exact { background: var(--exact-bg); color: var(--exact); }
+    .result.reject { background: var(--reject-bg); color: var(--reject); }
+    .result.blocked { background: var(--blocked-bg); color: var(--blocked); }
+    .result.unknown, .result.invalid { background: var(--unknown-bg); color: var(--unknown); }
+    .result h2 { color: inherit; }
+    .price-card {
+      margin-top: 12px;
+      background: white;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .price-card p { margin-bottom: 6px; }
+    .landed { font-size: 20px; font-weight: 700; }
+    .disclaimer {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .check-list { list-style: none; padding: 0; margin: 12px 0 0; }
+    .check-list li {
+      padding: 6px 0;
+      border-top: 1px solid var(--border);
+      font-size: 14px;
+    }
+    .pass { color: var(--exact); font-weight: 700; }
+    .fail { color: var(--blocked); font-weight: 700; }
+    @media (max-width: 700px) {
+      .fields { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>MedFinder</h1>
+      <p class="lede">Type a drug, or pick an example. The page shows a verified sample equivalent sold in India and a 90-day landed cost, or it names the rule that failed. Prescription photos and live seller search are not in this demo.</p>
+    </header>
+
+    <section>
+      <h2>Examples</h2>
+      <div class="examples">
+        <button type="button" class="example" data-name="Lipitor" data-strength="20 mg" data-form="tablet" data-release="IR">Lipitor 20 mg</button>
+        <button type="button" class="example" data-name="Synthroid" data-strength="50 mcg" data-form="tablet" data-release="IR">Synthroid 50 mcg</button>
+        <button type="button" class="example" data-name="Lipitor" data-strength="40 mg" data-form="tablet" data-release="IR">Lipitor 40 mg</button>
+        <button type="button" class="example" data-name="Metoprolol succinate" data-strength="50 mg" data-form="tablet" data-release="ER">Metoprolol succinate ER</button>
+        <button type="button" class="example" data-name="Adderall" data-strength="20 mg" data-form="tablet" data-release="IR">Adderall</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Find an equivalent</h2>
+      <form id="lookup">
+        <div class="fields">
+          <div>
+            <label for="name">Drug name</label>
+            <input id="name" name="name" autocomplete="off" placeholder="Lipitor" />
+          </div>
+          <div>
+            <label for="strength">Strength</label>
+            <input id="strength" name="strength" autocomplete="off" placeholder="20 mg" />
+          </div>
+          <div>
+            <label for="form">Form</label>
+            <select id="form" name="form">
+              <option value="tablet">Tablet</option>
+              <option value="capsule">Capsule</option>
+              <option value="injection">Injection</option>
+            </select>
+          </div>
+          <div>
+            <label for="release">Release</label>
+            <select id="release" name="release">
+              <option value="IR">IR</option>
+              <option value="ER">ER</option>
+            </select>
+          </div>
+        </div>
+        <button class="primary" type="submit">Find equivalent</button>
+      </form>
+    </section>
+
+    <section id="output" hidden>
+      <div id="result" class="result" aria-live="polite"></div>
+      <p class="disclaimer" id="disclaimer"></p>
+    </section>
+
+    <section>
+      <h2>Rule checks</h2>
+      <p class="lede">These cases confirm a match, a strength miss, a salt and release miss, and a blocked drug. Nothing here calls a model.</p>
+      <button type="button" id="run-checks">Check rules</button>
+      <ul id="checks" class="check-list"></ul>
+    </section>
+  </div>
+
+  <script src="catalog.js"></script>
+  <script src="match.js"></script>
+  <script>
+    var form = document.getElementById("lookup");
+    var output = document.getElementById("output");
+    var resultBox = document.getElementById("result");
+    var disclaimer = document.getElementById("disclaimer");
+
+    var DISCLAIMER = "Sample prices, not a live pharmacy listing. Confirm the ingredient, salt form, strength, and release type with a pharmacist before switching. This is not medical advice, and this page does not place an order.";
+
+    function fieldValue(id) {
+      return document.getElementById(id).value;
+    }
+
+    function fillExample(button) {
+      document.getElementById("name").value = button.getAttribute("data-name");
+      document.getElementById("strength").value = button.getAttribute("data-strength");
+      document.getElementById("form").value = button.getAttribute("data-form");
+      document.getElementById("release").value = button.getAttribute("data-release");
+    }
+
+    function renderResult(result) {
+      output.hidden = false;
+      resultBox.className = "result " + result.status;
+      disclaimer.textContent = DISCLAIMER;
+
+      if (result.status === "exact") {
+        var cost = result.cost;
+        var product = result.product;
+        resultBox.innerHTML =
+          "<h2>Verified equivalent</h2>" +
+          "<p>" + result.message + "</p>" +
+          "<div class='price-card'>" +
+            "<p><strong>" + product.brand + "</strong> · " + product.manufacturer + "</p>" +
+            "<p>" + product.ingredient + " " + product.salt + ", " +
+              window.MedFinder.formatStrength(product.strength) + " " + product.form + ", " + product.release + "</p>" +
+            "<p>Sample pack: " + product.packCount + " units at " + window.MedFinder.money(product.packPriceCents) + "</p>" +
+            "<p>Sample shipping: " + window.MedFinder.money(cost.shippingCents) + "</p>" +
+            "<p>90 days at " + cost.unitsPerDay + " unit a day = " + cost.units + " units, so " + cost.packs + " packs.</p>" +
+            "<p class='landed'>Landed cost " + window.MedFinder.money(cost.landedCents) + "</p>" +
+          "</div>";
+        return;
+      }
+
+      if (result.status === "reject") {
+        resultBox.innerHTML =
+          "<h2>Not a match</h2>" +
+          "<p>" + result.message + "</p>" +
+          "<p>No price is shown. The closest sample listing is " + result.product.brand + ".</p>";
+        return;
+      }
+
+      if (result.status === "blocked") {
+        resultBox.innerHTML = "<h2>Not available here</h2><p>" + result.message + "</p>";
+        return;
+      }
+
+      var heading = result.status === "unknown" ? "Not in the sample table" : "Need more detail";
+      resultBox.innerHTML = "<h2>" + heading + "</h2><p>" + result.message + "</p>";
+    }
+
+    function lookupFromForm() {
+      renderResult(window.MedFinder.matchDrug({
+        name: fieldValue("name"),
+        strength: fieldValue("strength"),
+        form: fieldValue("form"),
+        release: fieldValue("release")
+      }));
+    }
+
+    document.querySelectorAll(".example").forEach(function (button) {
+      button.addEventListener("click", function () {
+        fillExample(button);
+        lookupFromForm();
+      });
+    });
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      lookupFromForm();
+    });
+
+    document.getElementById("run-checks").addEventListener("click", function () {
+      var list = document.getElementById("checks");
+      var results = window.MedFinder.runChecks();
+      var passed = results.filter(function (item) { return item.passed; }).length;
+      list.innerHTML = results.map(function (item) {
+        var mark = item.passed ? "<span class='pass'>Pass</span>" : "<span class='fail'>Fail</span>";
+        return "<li>" + mark + " · " + item.name + "</li>";
+      }).join("");
+      list.insertAdjacentHTML("afterbegin", "<li><strong>" + passed + " of " + results.length + " passed</strong></li>");
+    });
+
+    var params = new URLSearchParams(window.location.search);
+    if (params.get("demo") === "lipitor") {
+      document.querySelector("[data-name='Lipitor'][data-strength='20 mg']").click();
+    }
+    if (params.get("checks") === "1") {
+      document.getElementById("run-checks").click();
+    }
+  </script>
+</body>
+</html>
