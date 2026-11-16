@@ -291,7 +291,7 @@
           <li><strong>What was checked:</strong> Lipitor 20 mg returns an RxCUI and still matches. Lipitor 40 mg and metoprolol succinate still show no price. Check rules still passes 10 of 10 and does not call RxNorm.</li>
           <li><strong>What broke / changed in PRD:</strong> v2 says the risky step is the lookup returning an ingredient without a salt or release type. The rules stay the decision. Photo upload is still not built.</li>
           <li><strong>Problem:</strong> Opening the HTML file from the disk cannot call RxNorm. The page has to be opened over http, including the published prototype URL. PostHog is installed on the product page and the prototype. Pageviews and clicks record when the page is opened over http. Session replay records when it is turned on in the PostHog project.</li>
-          <li><strong>Cost & time this week:</strong> $0.00 API spend · hours for November 15 not logged yet</li>
+          <li><strong>Cost & time this week:</strong> $0.00 on this RxNorm step. I spent 1 hour on Sunday, November 15.</li>
         </ul>
       </div>
 
@@ -300,7 +300,15 @@
         <ul>
           <li><strong>What shipped:</strong> <code>node server.js</code> asks OpenRouter for public India e-commerce suppliers. Each accepted row shows the supplier, pack price, shipping, 90-day landed cost, and source link. Shipping stated on the seller page is labeled as that page’s figure. Shipping that is estimated includes the basis. <code>match.js</code> still drops a row whose salt, strength, form, or release does not agree, and blocked drugs never call the model.</li>
           <li><strong>What was checked:</strong> Check rules passed 14 of 14, including a 20 mg row kept and a 40 mg row dropped, a succinate ER row rejected for a tartrate IR request, Adderall blocked with no price, and a row with no https page dropped. With no key in <code>.env</code>, Find equivalent still showed the Storvas sample and said the key is missing.</li>
-          <li><strong>Cost & time:</strong> A keyed Lipitor lookup on November 15 cost $0.0055. It listed PharmEasy rows at ₹664 for 10 tablets. Shipping was not stated on those pages, so it was not added. The checks around that lookup brought the model spend for the session to about $0.04. Hours for November 15 are still not logged.</li>
+          <li><strong>Cost & time:</strong> A keyed Lipitor lookup on November 15 cost $0.0055. It listed PharmEasy rows at ₹664 for 10 tablets. Shipping was not stated on those pages, so it was not added. The checks around that lookup brought the model spend for the session to about $0.04. I spent 1 hour on Sunday, November 15.</li>
+        </ul>
+      </div>
+
+      <div class="log-entry">
+        <h3>Build 2 · November 16, 2026</h3>
+        <ul>
+          <li><strong>What shipped:</strong> The supplier list and the US savings comparison are on <code>main</code>, so the public page includes them. PostHog is unchanged.</li>
+          <li><strong>Hours:</strong> 1 hour on Sunday, November 15, and 30 minutes on Monday, November 16. This week is 1.5 hours. With Build 1, the running total is 5 hours.</li>
         </ul>
       </div>
 
