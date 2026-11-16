@@ -127,6 +127,191 @@
     return failures;
   }
 
+  var SALT_WORDS = ["hydrochloride", "hcl", "succinate", "tartrate", "calcium", "sodium"];
+
+  function canonicalSalt(value) {
+    var text = normalizeName(value);
+    if (text === "hcl") return "hydrochloride";
+    return text;
+  }
+
+  function saltFromText(value) {
+    var text = normalizeName(value);
+    for (var i = 0; i < SALT_WORDS.length; i++) {
+      if (nameHits(text, SALT_WORDS[i])) return canonicalSalt(SALT_WORDS[i]);
+    }
+    return "";
+  }
+
+  function ingredientKey(value) {
+    var text = normalizeName(value);
+    SALT_WORDS.forEach(function (salt) {
+      text = text.replace(new RegExp("(^| )" + salt + "( |$)", "g"), " ");
+    });
+    return normalizeName(text);
+  }
+
+  function ingredientFromRxNorm(name) {
+    var text = normalizeName(name).replace(/\[[^\]]*\]/g, " ");
+    text = text.replace(/\d+(?:\.\d+)?\s*(mg|mcg|g|units\/ml).*/, " ");
+    text = text.replace(/\b(oral|tablet|tablets|capsule|capsules|injection|extended|immediate|release|hr|hour)\b/g, " ");
+    return ingredientKey(text);
+  }
+
+  function supplierStrength(row) {
+    if (row && row.strength && row.strength.value != null) return row.strength;
+    if (!row || row.strengthValue == null) return null;
+    return { value: Number(row.strengthValue), unit: normalizeName(row.strengthUnit) };
+  }
+
+  function supplierCost(row) {
+    var packs = Math.ceil((DAYS * 1) / row.packCount);
+    var drug = packs * row.packPrice;
+    var shipping = row.shippingAmount == null ? null : row.shippingAmount;
+    return {
+      days: DAYS,
+      unitsPerDay: 1,
+      units: DAYS,
+      packs: packs,
+      packCount: row.packCount,
+      packPrice: row.packPrice,
+      drug: roundMoney(drug),
+      shipping: shipping == null ? null : roundMoney(shipping),
+      landed: roundMoney(shipping == null ? drug : drug + shipping),
+      shippingIncluded: shipping != null
+    };
+  }
+
+  function roundMoney(value) {
+    return Math.round(value * 100) / 100;
+  }
+
+  function prepareSupplier(row) {
+    if (!row || typeof row !== "object") return null;
+    var pageUrl = String(row.pageUrl || "");
+    if (pageUrl.indexOf("https://") !== 0) return null;
+    var packPrice = Number(row.packPrice);
+    var packCount = Number(row.packCount);
+    if (!isFinite(packPrice) || packPrice < 0 || !isFinite(packCount) || packCount <= 0) return null;
+    var kind = normalizeName(row.shippingKind);
+    if (kind !== "page" && kind !== "estimate" && kind !== "unstated") kind = "unstated";
+    var shippingAmount = row.shippingAmount == null || row.shippingAmount === "" ? null : Number(row.shippingAmount);
+    var basis = String(row.shippingBasis || "").trim();
+    if (kind === "estimate" && !basis) kind = "unstated";
+    if (kind === "unstated" || !isFinite(shippingAmount) || shippingAmount < 0) {
+      kind = "unstated";
+      shippingAmount = null;
+      if (!basis) basis = "The seller page did not state a shipping figure.";
+    }
+    return {
+      supplier: String(row.supplier || "").trim(),
+      brand: String(row.brand || "").trim(),
+      ingredient: ingredientKey(row.ingredient),
+      salt: canonicalSalt(row.salt),
+      strength: supplierStrength(row),
+      form: normalizeForm(row.form),
+      release: normalizeRelease(row.release),
+      packCount: packCount,
+      packPrice: packPrice,
+      currency: normalizeName(row.currency).toUpperCase() || "INR",
+      shippingAmount: shippingAmount,
+      shippingKind: kind,
+      shippingBasis: basis,
+      pageUrl: pageUrl
+    };
+  }
+
+  function filterSuppliers(input, suppliers, rxnormName) {
+    var local = matchDrug(input || {});
+    if (local.status === "blocked" || local.status === "invalid") {
+      return { status: local.status, message: local.message, suppliers: [], failures: [], sample: local };
+    }
+
+    var strength = parseStrength(input && input.strength);
+    var form = normalizeForm(input && input.form);
+    var release = normalizeRelease(input && input.release);
+    if (!strength || !form || !release) {
+      return {
+        status: "invalid",
+        message: "Enter a strength such as 20 mg or 50 mcg, a dosage form, and IR or ER.",
+        suppliers: [],
+        failures: [],
+        sample: local
+      };
+    }
+
+    var identity = local.identity || null;
+    var expectedSalt = (identity && identity.salt) || saltFromText(input && input.name) || saltFromText(rxnormName) || "";
+    var expectedIngredient = (identity && identity.ingredient) || ingredientFromRxNorm(rxnormName) || ingredientKey(input && input.name);
+    var accepted = [];
+    var failures = [];
+
+    (suppliers || []).forEach(function (candidate) {
+      var row = prepareSupplier(candidate);
+      if (!row) return;
+      var rowFailures = [];
+      if (!row.ingredient || !expectedIngredient || row.ingredient !== ingredientKey(expectedIngredient)) {
+        rowFailures.push({ rule: "ingredient", detail: "Ingredient does not agree." });
+      }
+      if (expectedSalt && row.salt !== canonicalSalt(expectedSalt)) {
+        rowFailures.push({
+          rule: "salt",
+          detail: "Salt form does not agree: " + (expectedSalt || "unspecified") + " is not " + (row.salt || "unspecified") + "."
+        });
+      }
+      if (!sameStrength(strength, row.strength)) {
+        rowFailures.push({
+          rule: "strength",
+          detail: "Strength does not agree: " + formatStrength(strength) + " is not " + formatStrength(row.strength) + "."
+        });
+      }
+      if (form !== row.form) {
+        rowFailures.push({ rule: "form", detail: "Dosage form does not agree: " + form + " is not " + row.form + "." });
+      }
+      if (release !== row.release) {
+        rowFailures.push({ rule: "release", detail: "Release type does not agree: " + release + " is not " + row.release + "." });
+      }
+      if (rowFailures.length) {
+        failures = failures.concat(rowFailures);
+        return;
+      }
+      row.cost = supplierCost(row);
+      accepted.push(row);
+    });
+
+    if (accepted.length) {
+      return {
+        status: "exact",
+        message: "Exact match. Ingredient, salt form, strength, dosage form, and release type agree.",
+        suppliers: accepted,
+        failures: [],
+        sample: local
+      };
+    }
+
+    if (failures.length) {
+      var unique = [];
+      failures.forEach(function (failure) {
+        if (!unique.some(function (item) { return item.detail === failure.detail; })) unique.push(failure);
+      });
+      return {
+        status: "reject",
+        message: "Not a match. " + unique.map(function (failure) { return failure.detail; }).join(" "),
+        suppliers: [],
+        failures: unique,
+        sample: local
+      };
+    }
+
+    return {
+      status: "none",
+      message: "No live supplier page was returned.",
+      suppliers: [],
+      failures: [],
+      sample: local
+    };
+  }
+
   function matchDrug(input) {
     var name = normalizeName(input && input.name);
     if (!name) {
@@ -302,15 +487,103 @@
       pass: function (result) {
         return result.status === "unknown" && result.cost === null;
       }
+    },
+    {
+      name: "A live 20 mg atorvastatin row is priced and a 40 mg row is not",
+      input: { name: "Lipitor", strength: "20 mg", form: "tablet", release: "IR" },
+      run: function () {
+        var result = filterSuppliers(
+          { name: "Lipitor", strength: "20 mg", form: "tablet", release: "IR" },
+          [
+            supplierRow(20, "https://example.com/storvas-20"),
+            supplierRow(40, "https://example.com/storvas-40")
+          ],
+          "atorvastatin 20 MG Oral Tablet [Lipitor]"
+        );
+        return result.suppliers.length === 1 &&
+          result.suppliers[0].strength.value === 20 &&
+          result.suppliers[0].cost.landed === 38 &&
+          result.suppliers[0].cost.shippingIncluded;
+      }
+    },
+    {
+      name: "A live succinate ER row is rejected for a tartrate IR request",
+      input: { name: "metoprolol tartrate", strength: "50 mg", form: "tablet", release: "IR" },
+      run: function () {
+        var result = filterSuppliers(
+          { name: "metoprolol tartrate", strength: "50 mg", form: "tablet", release: "IR" },
+          [{
+            supplier: "Example Pharmacy",
+            brand: "Seloken XL",
+            ingredient: "metoprolol",
+            salt: "succinate",
+            strength: { value: 50, unit: "mg" },
+            form: "tablet",
+            release: "ER",
+            packCount: 10,
+            packPrice: 4,
+            currency: "USD",
+            shippingAmount: 2,
+            shippingKind: "page",
+            shippingBasis: "Stated on the product page.",
+            pageUrl: "https://example.com/seloken"
+          }],
+          "metoprolol succinate"
+        );
+        return result.status === "reject" && result.suppliers.length === 0 && hasRule(result, "salt") && hasRule(result, "release");
+      }
+    },
+    {
+      name: "Adderall is blocked before any supplier row is priced",
+      input: { name: "Adderall", strength: "20 mg", form: "tablet", release: "IR" },
+      run: function () {
+        var result = filterSuppliers(
+          { name: "Adderall", strength: "20 mg", form: "tablet", release: "IR" },
+          [supplierRow(20, "https://example.com/adderall")],
+          "amphetamine"
+        );
+        return result.status === "blocked" && result.suppliers.length === 0;
+      }
+    },
+    {
+      name: "A supplier row without an https page is dropped",
+      input: { name: "Lipitor", strength: "20 mg", form: "tablet", release: "IR" },
+      run: function () {
+        var result = filterSuppliers(
+          { name: "Lipitor", strength: "20 mg", form: "tablet", release: "IR" },
+          [supplierRow(20, "")],
+          "atorvastatin 20 MG Oral Tablet [Lipitor]"
+        );
+        return result.suppliers.length === 0;
+      }
     }
   ];
+
+  function supplierRow(strength, pageUrl) {
+    return {
+      supplier: "Example Pharmacy",
+      brand: "Storvas " + strength,
+      ingredient: "atorvastatin",
+      salt: "calcium",
+      strength: { value: strength, unit: "mg" },
+      form: "tablet",
+      release: "IR",
+      packCount: 10,
+      packPrice: 4,
+      currency: "USD",
+      shippingAmount: 2,
+      shippingKind: "page",
+      shippingBasis: "Stated on the product page.",
+      pageUrl: pageUrl
+    };
+  }
 
   function runChecks() {
     return CHECKS.map(function (check) {
       var result = matchDrug(check.input);
       var passed = false;
       try {
-        passed = !!check.pass(result);
+        passed = check.run ? !!check.run() : !!check.pass(result);
       } catch (error) {
         passed = false;
       }
@@ -320,6 +593,7 @@
 
   window.MedFinder = {
     matchDrug: matchDrug,
+    filterSuppliers: filterSuppliers,
     runChecks: runChecks,
     money: money,
     formatStrength: formatStrength

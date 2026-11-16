@@ -168,7 +168,7 @@
     <section id="live-demo">
       <h2>Product Showcase (Prototype / Live App / 2-Min Video)</h2>
       <p>
-        <strong>Current Status:</strong> Build 2. Open <a href="https://asn5995.github.io/Medfinder/prototype/">asn5995.github.io/Medfinder/prototype/</a>. Find equivalent calls RxNorm, then the rules show the match. Do not open the HTML file from the disk. That address cannot call RxNorm.<br />
+        <strong>Current Status:</strong> Build 2. The published prototype at <a href="https://asn5995.github.io/Medfinder/prototype/">asn5995.github.io/Medfinder/prototype/</a> calls RxNorm and shows the sample catalog. Live supplier lists run from <code>node server.js</code> on your computer, with the OpenRouter key in <code>.env</code>. Do not open the HTML file from the disk.<br />
         <strong>Demo:</strong> Screenshot below, November 15, 2026. Lipitor 20 mg is identified as RxCUI 617318, then matched to Storvas 20. The US price shown is $249.00 and the landed cost is $27.00.
       </p>
       <p>
@@ -187,7 +187,7 @@
       <h3>1. Target User & The Job to Be Done</h3>
       <p><strong>Who is this for?</strong> A classmate or friend on a long-term prescription (for example cholesterol, thyroid, or blood pressure medicine) who pays a high price at a US pharmacy and wants to know whether the same medicine is sold for less in India. A specific participant and testing session are pending.</p>
       <p><strong>The painful "Before" workflow:</strong> They leave the pharmacy with a brand name, pay the US price, or ask someone in India to buy it. They search the brand, find a different name, and cannot tell whether the ingredient, salt form, strength, and release type are the same. They message a chemist or try a website without knowing whether the seller is legitimate.</p>
-      <p><strong>The "After" workflow with this product:</strong> In the local prototype, they type the drug or pick an example and see one verified Indian equivalent plus a sample landed cost. A match counts only when the ingredient, salt form, strength, dosage form, and release type all agree. The screen says to confirm with a pharmacist before switching. Photo upload is not built yet. Ordering stays outside the app.</p>
+      <p><strong>The "After" workflow with this product:</strong> They type the drug or pick an example. RxNorm identifies the name. With the local server running, they see a list of India e-commerce suppliers, each with a pack price, a shipping figure, a 90-day landed cost, and a source link. A match counts only when the ingredient, salt form, strength, dosage form, and release type all agree. If the server is not running, the sample catalog is shown. Photo upload is not built yet. Ordering stays outside the app.</p>
 
       <h3>2. Scope & Explicit Non-Goals</h3>
       <ul>
@@ -200,7 +200,7 @@
       <h3>3. How It Works Under the Hood & Riskiest Assumption (Week 2+)</h3>
       <p><strong>Riskiest Assumption:</strong> A real drug lookup can name the ingredient without the salt or the release type. The rules still have to reject metoprolol succinate versus tartrate, and 40 mg versus 20 mg. No outside user has tried it.</p>
       <p><strong>How this build tests it:</strong> Find equivalent calls RxNorm, shows the returned name and RxCUI, then runs the same rules. Lipitor 20 mg still matches. Lipitor 40 mg and metoprolol succinate still show no price. If RxNorm does not answer, the page says the lookup failed and does not invent an ID.</p>
-      <p><strong>Simple Architecture:</strong> Typed drug → RxNorm API → match.js rules → India listing, US price, and landed cost, or the failed rule. RxNorm only identifies the name. The code decides the match. Cost per run is $0.</p>
+      <p><strong>Simple Architecture:</strong> Typed drug → RxNorm API → local server, which asks a model to read public India e-commerce pages → match.js accepts or rejects each supplier → a list with pack price, shipping, landed cost, and the source link, or the failed rule. RxNorm only identifies the name. The model does not decide the match. The sample catalog is the fallback when no supplier page comes back. The OpenRouter key stays in `.env`.</p>
 
       <h3>4. Unit Economics & Analytics Snapshot (Updated Weekly)</h3>
       <div class="grid-2">
@@ -210,7 +210,7 @@
         </div>
         <div class="stat-box">
           <div class="stat-label">Est. Cost Per User Run</div>
-          <div class="stat-value">$0</div>
+          <div class="stat-value">$0 until a keyed run</div>
         </div>
         <div class="stat-box">
           <div class="stat-label">User Evidence (Analytics from Build 2)</div>
@@ -292,6 +292,15 @@
           <li><strong>What broke / changed in PRD:</strong> v2 says the risky step is the lookup returning an ingredient without a salt or release type. The rules stay the decision. Photo upload is still not built.</li>
           <li><strong>Problem:</strong> Opening the HTML file from the disk cannot call RxNorm. The page has to be opened over http, including the published prototype URL. PostHog is installed on the product page and the prototype. Pageviews and clicks record when the page is opened over http. Session replay records when it is turned on in the PostHog project.</li>
           <li><strong>Cost & time this week:</strong> $0.00 API spend · hours for November 15 not logged yet</li>
+        </ul>
+      </div>
+
+      <div class="log-entry">
+        <h3>Build 2 · Live supplier list · November 15, 2026</h3>
+        <ul>
+          <li><strong>What shipped:</strong> <code>node server.js</code> asks OpenRouter for public India e-commerce suppliers. Each accepted row shows the supplier, pack price, shipping, 90-day landed cost, and source link. Shipping stated on the seller page is labeled as that page’s figure. Shipping that is estimated includes the basis. <code>match.js</code> still drops a row whose salt, strength, form, or release does not agree, and blocked drugs never call the model.</li>
+          <li><strong>What was checked:</strong> Check rules passed 14 of 14, including a 20 mg row kept and a 40 mg row dropped, a succinate ER row rejected for a tartrate IR request, Adderall blocked with no price, and a row with no https page dropped. With no key in <code>.env</code>, Find equivalent still showed the Storvas sample and said the key is missing.</li>
+          <li><strong>Cost & time:</strong> $0.00 model spend. No keyed run was made, so there is no model cost to record. Hours for November 15 are still not logged.</li>
         </ul>
       </div>
 

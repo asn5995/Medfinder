@@ -144,7 +144,7 @@
   <div class="wrap">
     <header>
       <h1>MedFinder</h1>
-      <p class="lede">Type a drug, or pick an example. The page shows a verified sample equivalent sold in India and a 90-day landed cost, or it names the rule that failed. Prescription photos and live seller search are not in this demo.</p>
+      <p class="lede">Type a drug, or pick an example. RxNorm identifies the name. When the local server is running, the page lists India e-commerce suppliers with a pack price and shipping. Otherwise it shows the sample catalog. A mismatch shows the failed rule and no price.</p>
     </header>
 
     <section>
@@ -265,6 +265,29 @@
       });
     }
 
+    function formatAmount(amount, currency) {
+      var number = Number(amount).toFixed(2);
+      if (currency === "USD") return "$" + number;
+      if (currency === "INR") return "₹" + number;
+      return number + " " + escapeHtml(currency || "");
+    }
+
+    function shippingText(row) {
+      if (row.shippingKind === "page" && row.cost.shippingIncluded) {
+        return "Shipping " + formatAmount(row.cost.shipping, row.currency) + ", as stated on the seller page.";
+      }
+      if (row.shippingKind === "estimate" && row.cost.shippingIncluded) {
+        return "Estimated shipping " + formatAmount(row.cost.shipping, row.currency) + ". " + escapeHtml(row.shippingBasis);
+      }
+      return "Shipping was not stated, so it is not included in the landed cost.";
+    }
+
+    function liveNote(live) {
+      if (!live || live.reason === "missing_key") return "The OpenRouter key is not in .env, so the sample catalog is shown.";
+      if (live.reason === "model_error") return "The supplier lookup failed, so the sample catalog is shown.";
+      return "No live supplier page was returned, so the sample catalog is shown.";
+    }
+
     function rxnormLine(identity) {
       if (!identity) return "";
       if (identity.error) return "<p>RxNorm lookup failed. No ID was invented.</p>";
@@ -278,10 +301,10 @@
       }
     }
 
-    function renderResult(result, identity) {
+    function renderResult(result, identity, note) {
       output.hidden = false;
       resultBox.className = "result " + result.status;
-      var identified = rxnormLine(identity);
+      var identified = rxnormLine(identity) + (note ? "<p>" + escapeHtml(note) + "</p>" : "");
 
       if (result.status === "exact") {
         var cost = result.cost;
@@ -308,7 +331,7 @@
           "<h2>Not a match</h2>" +
           identified +
           "<p>" + result.message + "</p>" +
-          "<p>No price is shown. The closest listing is " + result.product.brand + ".</p>";
+          "<p>No price is shown." + (result.product ? " The closest listing is " + escapeHtml(result.product.brand) + "." : "") + "</p>";
         return;
       }
 
@@ -319,6 +342,37 @@
 
       var heading = result.status === "unknown" ? "Not in the sample table" : "Need more detail";
       resultBox.innerHTML = "<h2>" + heading + "</h2>" + identified + "<p>" + result.message + "</p>";
+    }
+
+    function renderSuppliers(filtered, identity, live) {
+      output.hidden = false;
+      resultBox.className = "result exact";
+      var cards = filtered.suppliers.map(function (row) {
+        var cost = row.cost;
+        var landedLabel = cost.shippingIncluded ? "Landed cost " : "Drug cost ";
+        return "<div class='price-card'>" +
+          "<p><strong>" + escapeHtml(row.supplier || "Supplier") + "</strong>" +
+            (row.brand ? " · " + escapeHtml(row.brand) : "") + "</p>" +
+          "<p>" + escapeHtml(row.ingredient) + (row.salt ? " " + escapeHtml(row.salt) : "") + ", " +
+            escapeHtml(window.MedFinder.formatStrength(row.strength)) + " " +
+            escapeHtml(row.form) + ", " + escapeHtml(row.release) + "</p>" +
+          "<p>Pack: " + cost.packCount + " units at " + formatAmount(row.packPrice, row.currency) + "</p>" +
+          "<p>" + shippingText(row) + "</p>" +
+          "<p>90 days at 1 unit a day = " + cost.units + " units, so " + cost.packs + " packs.</p>" +
+          "<p class='landed'>" + landedLabel + formatAmount(cost.landed, row.currency) + "</p>" +
+          "<p><a href='" + escapeHtml(row.pageUrl) + "'>Source page</a></p>" +
+          "</div>";
+      }).join("");
+      var costLine = live && live.costUsd != null
+        ? "<p>This model lookup cost $" + Number(live.costUsd).toFixed(4) + ".</p>"
+        : "";
+      resultBox.innerHTML =
+        "<h2>Verified suppliers</h2>" +
+        rxnormLine(identity) +
+        "<p>" + filtered.message + "</p>" +
+        cards +
+        costLine +
+        "<p class='disclaimer'>An estimated shipping figure is not a checkout quote. Confirm the medicine with a pharmacist before switching.</p>";
     }
 
     function lookupFromForm(source) {
@@ -334,11 +388,42 @@
       });
       output.hidden = false;
       resultBox.className = "result unknown";
-      resultBox.innerHTML = "<h2>Checking RxNorm</h2><p>Looking up that name. The match rules run after the ID comes back.</p>";
+      resultBox.innerHTML = "<h2>Checking RxNorm</h2><p>Looking up that name. Supplier pages are checked after the ID comes back.</p>";
       return lookupRxNorm(input.name, input.strength).then(function (identity) {
         var result = window.MedFinder.matchDrug(input);
         track("showed_result", { status: result.status, rxcui: identity && identity.rxcui ? identity.rxcui : "" });
-        renderResult(result, identity);
+        if (result.status === "blocked" || result.status === "invalid") {
+          renderResult(result, identity);
+          return;
+        }
+        return fetch("/listings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: input.name,
+            strength: input.strength,
+            form: input.form,
+            release: input.release,
+            rxnormName: identity && identity.name ? identity.name : "",
+            rxcui: identity && identity.rxcui ? identity.rxcui : ""
+          })
+        }).then(function (response) {
+          if (!response.ok) throw new Error("supplier server");
+          return response.json();
+        }).then(function (live) {
+          var filtered = window.MedFinder.filterSuppliers(input, live.suppliers || [], identity && identity.name);
+          if (filtered.status === "exact") {
+            renderSuppliers(filtered, identity, live);
+            return;
+          }
+          if (filtered.status === "reject") {
+            renderResult({ status: "reject", message: filtered.message, product: null }, identity);
+            return;
+          }
+          renderResult(result, identity, liveNote(live));
+        }).catch(function () {
+          renderResult(result, identity, "The local supplier server is not running, so the sample catalog is shown.");
+        });
       });
     }
 
