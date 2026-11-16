@@ -144,7 +144,7 @@
   <div class="wrap">
     <header>
       <h1>MedFinder</h1>
-      <p class="lede">Type a drug, or pick an example. RxNorm identifies the name. When the local server is running, the page lists India e-commerce suppliers with a pack price and shipping. Otherwise it shows the sample catalog. A mismatch shows the failed rule and no price.</p>
+      <p class="lede">Type a drug, or pick an example. RxNorm identifies the name. When the local server is running, the page lists India e-commerce suppliers and a US price for the same 90 units, plus the savings. Otherwise it shows the sample catalog. A mismatch shows the failed rule and no price.</p>
     </header>
 
     <section>
@@ -320,8 +320,9 @@
             "<p>Pack: " + product.packCount + " units at " + window.MedFinder.money(product.packPriceCents) + "</p>" +
             "<p>Shipping: " + window.MedFinder.money(cost.shippingCents) + "</p>" +
             "<p>90 days at " + cost.unitsPerDay + " unit a day = " + cost.units + " units, so " + cost.packs + " packs.</p>" +
-            "<p class='landed'>US price " + window.MedFinder.money(product.us90DayCents) + "</p>" +
+            "<p class='landed'>US price " + window.MedFinder.money(product.us90DayCents) + " for the same " + cost.units + " units</p>" +
             "<p class='landed'>Landed cost " + window.MedFinder.money(cost.landedCents) + "</p>" +
+            "<p class='landed'>You would save " + window.MedFinder.money(product.us90DayCents - cost.landedCents) + " compared with that US price.</p>" +
           "</div>";
         return;
       }
@@ -344,9 +345,47 @@
       resultBox.innerHTML = "<h2>" + heading + "</h2>" + identified + "<p>" + result.message + "</p>";
     }
 
-    function renderSuppliers(filtered, identity, live) {
+    function indiaInUsd(row, rate) {
+      if (row.currency === "USD") return row.cost.landed;
+      if (row.currency === "INR" && rate) return row.cost.landed / rate;
+      return null;
+    }
+
+    function savingsText(row, usQuote, rateInfo) {
+      if (!usQuote) return "";
+      var indiaUsd = indiaInUsd(row, rateInfo && rateInfo.rate);
+      if (indiaUsd == null) return "<p>Savings are not shown because no exchange rate was available.</p>";
+      var save = usQuote.cost.landed - indiaUsd;
+      var basis = row.cost.shippingIncluded ? "landed cost" : "drug cost, because shipping was not stated";
+      if (save >= 0) {
+        return "<p class='landed'>You would save about " + formatAmount(save, "USD") + " compared with the US price. This uses the India " + basis + ".</p>";
+      }
+      return "<p class='landed'>The US price is about " + formatAmount(Math.abs(save), "USD") + " lower for the same " + row.cost.units + " units.</p>";
+    }
+
+    function renderSuppliers(filtered, identity, live, usQuote) {
       output.hidden = false;
       resultBox.className = "result exact";
+      var rateInfo = live && live.usdInr;
+      var usHtml = "";
+      if (usQuote) {
+        usHtml = "<div class='price-card'>" +
+          "<p><strong>United States, same " + usQuote.cost.units + " units at " +
+            escapeHtml(window.MedFinder.formatStrength(usQuote.strength)) + "</strong></p>" +
+          "<p>" + escapeHtml(usQuote.supplier || "US seller") +
+            (usQuote.brand ? " · " + escapeHtml(usQuote.brand) : "") + "</p>" +
+          "<p>" + usQuote.cost.packs + " packs of " + usQuote.cost.packCount +
+            " at " + formatAmount(usQuote.packPrice, "USD") + ".</p>" +
+          "<p class='landed'>US cost " + formatAmount(usQuote.cost.landed, "USD") + "</p>" +
+          "<p><a href='" + escapeHtml(usQuote.pageUrl) + "'>US source page</a></p>" +
+          "</div>";
+        if (rateInfo) {
+          usHtml += "<p>Savings use 1 USD = ₹" + Number(rateInfo.rate).toFixed(2) +
+            (rateInfo.date ? " on " + escapeHtml(rateInfo.date) : "") + ".</p>";
+        }
+      } else {
+        usHtml = "<p>A United States price for the same strength was not found, so savings are not shown.</p>";
+      }
       var cards = filtered.suppliers.map(function (row) {
         var cost = row.cost;
         var landedLabel = cost.shippingIncluded ? "Landed cost " : "Drug cost ";
@@ -360,6 +399,7 @@
           "<p>" + shippingText(row) + "</p>" +
           "<p>90 days at 1 unit a day = " + cost.units + " units, so " + cost.packs + " packs.</p>" +
           "<p class='landed'>" + landedLabel + formatAmount(cost.landed, row.currency) + "</p>" +
+          savingsText(row, usQuote, rateInfo) +
           "<p><a href='" + escapeHtml(row.pageUrl) + "'>Source page</a></p>" +
           "</div>";
       }).join("");
@@ -370,6 +410,7 @@
         "<h2>Verified suppliers</h2>" +
         rxnormLine(identity) +
         "<p>" + filtered.message + "</p>" +
+        usHtml +
         cards +
         costLine +
         "<p class='disclaimer'>An estimated shipping figure is not a checkout quote. Confirm the medicine with a pharmacist before switching.</p>";
@@ -413,7 +454,7 @@
         }).then(function (live) {
           var filtered = window.MedFinder.filterSuppliers(input, live.suppliers || [], identity && identity.name);
           if (filtered.status === "exact") {
-            renderSuppliers(filtered, identity, live);
+            renderSuppliers(filtered, identity, live, window.MedFinder.usSupply(input, live.us));
             return;
           }
           if (filtered.status === "reject") {

@@ -88,7 +88,7 @@ function cleanSupplier(row) {
   if (pageUrl.indexOf("https://") !== 0) return null;
   var packPrice = Number(row.packPrice);
   var packCount = Number(row.packCount);
-  if (!isFinite(packPrice) || packPrice < 0 || !isFinite(packCount) || packCount <= 0) return null;
+  if (!isFinite(packPrice) || packPrice <= 0 || !isFinite(packCount) || packCount <= 0) return null;
   var kind = normalizeName(row.shippingKind);
   if (kind !== "page" && kind !== "estimate" && kind !== "unstated") kind = "unstated";
   var shippingAmount = row.shippingAmount == null || row.shippingAmount === "" ? null : Number(row.shippingAmount);
@@ -126,6 +126,28 @@ function parseModelJson(text) {
   return JSON.parse(raw.slice(start, end + 1));
 }
 
+function allowedUsHost(url) {
+  try {
+    var host = new URL(url).hostname.replace(/^www\./, "");
+    return host === "costplusdrugs.com" || host === "goodrx.com" || host === "drugs.com" || host === "singlecare.com";
+  } catch (error) {
+    return false;
+  }
+}
+
+function usdInrRate() {
+  return fetch("https://api.frankfurter.app/latest?from=USD&to=INR").then(function (response) {
+    if (!response.ok) throw new Error("rate");
+    return response.json();
+  }).then(function (data) {
+    var rate = data && data.rates && Number(data.rates.INR);
+    if (!isFinite(rate) || rate <= 0) return null;
+    return { rate: rate, date: data.date || "" };
+  }).catch(function () {
+    return null;
+  });
+}
+
 function keepLivePages(rows) {
   return Promise.all(rows.map(function (row) {
     var controller = new AbortController();
@@ -138,7 +160,7 @@ function keepLivePages(rows) {
     }).then(function (response) {
       clearTimeout(timer);
       if (response.body && response.body.cancel) response.body.cancel();
-      return response.status >= 200 && response.status < 400 ? row : null;
+      return (response.status >= 200 && response.status < 400) || response.status === 403 ? row : null;
     }).catch(function () {
       clearTimeout(timer);
       return null;
@@ -156,14 +178,18 @@ function askModel(input) {
 
   var instructions = [
     "Search Indian online pharmacies for this medicine.",
-    "Return only JSON: {\"suppliers\":[...]}.",
+    "Return only JSON with two keys: suppliers and us.",
     "Each item needs supplier, brand, ingredient, salt, strengthValue, strengthUnit, form, release, packCount, packPrice, currency, shippingAmount, shippingKind, shippingBasis, pageUrl.",
     "salt is calcium, sodium, hydrochloride, succinate, or tartrate.",
     "form is tablet, capsule, or injection. release is IR or ER. currency is INR.",
     "shippingKind is page, estimate, or unstated. If shipping is not stated, shippingKind is unstated and shippingAmount is null.",
     "If shippingKind is estimate, shippingBasis must explain the basis in one sentence.",
     "Use only https URLs from 1mg.com, pharmeasy.in, netmeds.com, or apollopharmacy.in that appear in search results.",
-    "Do not invent a URL, a price, or a shipping figure. If you cannot find a page, return an empty suppliers array."
+    "Also return us: one United States retail price for the same ingredient, strength, form, and release.",
+    "us needs supplier, brand, ingredient, salt, strengthValue, strengthUnit, form, release, packCount, packPrice, currency, pageUrl.",
+    "us.currency is USD. us.pageUrl must be on costplusdrugs.com, goodrx.com, drugs.com, or singlecare.com, not a manufacturer document.",
+    "us.packPrice must be a number greater than 0 taken from that page. If the page does not show a price, set us to null.",
+    "Do not invent a URL, a price, or a shipping figure. If you cannot find a page, use an empty suppliers array or us null."
   ].join(" ");
   var question = [
     "Find up to 3 current listings sold in India for",
@@ -171,7 +197,8 @@ function askModel(input) {
     input.strength || "",
     input.form || "",
     (input.release || "") + ".",
-    input.rxnormName ? "The standardized name is " + input.rxnormName + "." : ""
+    input.rxnormName ? "The standardized name is " + input.rxnormName + "." : "",
+    "Also find one United States retail price for the same strength."
   ].join(" ");
 
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -201,12 +228,20 @@ function askModel(input) {
         parsed = { suppliers: [] };
       }
       var candidates = (parsed.suppliers || []).map(cleanSupplier).filter(Boolean).slice(0, 5);
-      return keepLivePages(candidates).then(function (suppliers) {
+      var usCandidate = cleanSupplier(parsed.us);
+      if (usCandidate && (usCandidate.currency !== "USD" || !allowedUsHost(usCandidate.pageUrl))) usCandidate = null;
+      return Promise.all([
+        keepLivePages(candidates),
+        usCandidate ? keepLivePages([usCandidate]) : Promise.resolve([]),
+        usdInrRate()
+      ]).then(function (checked) {
       var cost = payload && payload.usage && payload.usage.cost;
       return {
         ok: true,
         reason: "",
-        suppliers: suppliers,
+        suppliers: checked[0],
+        us: checked[1][0] || null,
+        usdInr: checked[2],
         model: MODEL,
         costUsd: typeof cost === "number" ? cost : null
       };

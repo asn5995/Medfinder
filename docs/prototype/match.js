@@ -221,6 +221,17 @@
     };
   }
 
+  function usSupply(input, row) {
+    var prepared = prepareSupplier(row);
+    if (!prepared || prepared.currency !== "USD") return null;
+    var strength = parseStrength(input && input.strength);
+    var form = normalizeForm(input && input.form);
+    var release = normalizeRelease(input && input.release);
+    if (!sameStrength(strength, prepared.strength) || form !== prepared.form || release !== prepared.release) return null;
+    prepared.cost = supplierCost(prepared);
+    return prepared;
+  }
+
   function filterSuppliers(input, suppliers, rxnormName) {
     var local = matchDrug(input || {});
     if (local.status === "blocked" || local.status === "invalid") {
@@ -546,6 +557,47 @@
       }
     },
     {
+      name: "A US price is kept for the same strength and the 90-unit cost is calculated",
+      input: { name: "Lipitor", strength: "20 mg", form: "tablet", release: "IR" },
+      run: function () {
+        var kept = usSupply(
+          { name: "Lipitor", strength: "20 mg", form: "tablet", release: "IR" },
+          {
+            supplier: "Cost Plus",
+            brand: "Atorvastatin",
+            ingredient: "atorvastatin",
+            salt: "calcium",
+            strength: { value: 20, unit: "mg" },
+            form: "tablet",
+            release: "IR",
+            packCount: 30,
+            packPrice: 6,
+            currency: "USD",
+            shippingKind: "unstated",
+            pageUrl: "https://example.com/us"
+          }
+        );
+        var dropped = usSupply(
+          { name: "Lipitor", strength: "20 mg", form: "tablet", release: "IR" },
+          {
+            supplier: "Cost Plus",
+            brand: "Atorvastatin",
+            ingredient: "atorvastatin",
+            salt: "calcium",
+            strength: { value: 40, unit: "mg" },
+            form: "tablet",
+            release: "IR",
+            packCount: 30,
+            packPrice: 6,
+            currency: "USD",
+            shippingKind: "unstated",
+            pageUrl: "https://example.com/us-40"
+          }
+        );
+        return !!kept && kept.cost.units === 90 && kept.cost.packs === 3 && kept.cost.landed === 18 && dropped === null;
+      }
+    },
+    {
       name: "A supplier row without an https page is dropped",
       input: { name: "Lipitor", strength: "20 mg", form: "tablet", release: "IR" },
       run: function () {
@@ -594,6 +646,7 @@
   window.MedFinder = {
     matchDrug: matchDrug,
     filterSuppliers: filterSuppliers,
+    usSupply: usSupply,
     runChecks: runChecks,
     money: money,
     formatStrength: formatStrength
