@@ -4,6 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MedFinder prototype</title>
+  <script>
+    !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageViewId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+    var MEDFINDER_POSTHOG_KEY = "phc_qtu6LHpuxNc27dymLyG5cifqUzb3qzqCN8A26DiyTDGJ";
+    var MEDFINDER_POSTHOG_HOST = "https://us.i.posthog.com";
+    if (MEDFINDER_POSTHOG_KEY) {
+      posthog.init(MEDFINDER_POSTHOG_KEY, {
+        api_host: MEDFINDER_POSTHOG_HOST,
+        person_profiles: "identified_only",
+        capture_pageview: true,
+        capture_pageleave: true,
+        disable_session_recording: false
+      });
+    }
+  </script>
   <style>
     :root {
       --bg: #fafafa;
@@ -206,15 +220,75 @@
       document.getElementById("release").value = button.getAttribute("data-release");
     }
 
-    function renderResult(result) {
+    function escapeHtml(value) {
+      return String(value == null ? "" : value).replace(/[&<>"']/g, function (character) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character];
+      });
+    }
+
+    function strengthNeedle(raw) {
+      var match = String(raw || "").toLowerCase().replace(/\s+/g, "").match(/^(\d+(?:\.\d+)?)(mg|mcg|g|units\/ml)$/);
+      if (!match) return "";
+      return match[1] + " " + match[2].toUpperCase();
+    }
+
+    function pickRxNormConcept(groups, strength) {
+      var concepts = [];
+      (groups || []).forEach(function (group) {
+        (group.conceptProperties || []).forEach(function (concept) {
+          if (concept && concept.rxcui && concept.name) concepts.push(concept);
+        });
+      });
+      if (!concepts.length) return null;
+      var needle = strengthNeedle(strength);
+      if (needle) {
+        var matched = concepts.filter(function (concept) {
+          return concept.name.toUpperCase().indexOf(needle) !== -1;
+        });
+        if (matched.length) return matched[0];
+      }
+      return concepts[0];
+    }
+
+    function lookupRxNorm(name, strength) {
+      var url = "https://rxnav.nlm.nih.gov/REST/drugs.json?name=" + encodeURIComponent(name);
+      return fetch(url).then(function (response) {
+        if (!response.ok) throw new Error("RxNorm status " + response.status);
+        return response.json();
+      }).then(function (data) {
+        var groups = data && data.drugGroup && data.drugGroup.conceptGroup;
+        var concept = pickRxNormConcept(groups, strength);
+        if (!concept) return { found: false };
+        return { found: true, rxcui: concept.rxcui, name: concept.name };
+      }).catch(function () {
+        return { error: true };
+      });
+    }
+
+    function rxnormLine(identity) {
+      if (!identity) return "";
+      if (identity.error) return "<p>RxNorm lookup failed. No ID was invented.</p>";
+      if (!identity.found) return "<p>RxNorm did not return an ID for that name.</p>";
+      return "<p>RxNorm: " + escapeHtml(identity.name) + " (RxCUI " + escapeHtml(identity.rxcui) + ")</p>";
+    }
+
+    function track(eventName, properties) {
+      if (window.posthog && typeof window.posthog.capture === "function") {
+        window.posthog.capture(eventName, properties || {});
+      }
+    }
+
+    function renderResult(result, identity) {
       output.hidden = false;
       resultBox.className = "result " + result.status;
+      var identified = rxnormLine(identity);
 
       if (result.status === "exact") {
         var cost = result.cost;
         var product = result.product;
         resultBox.innerHTML =
           "<h2>Verified equivalent</h2>" +
+          identified +
           "<p>" + result.message + "</p>" +
           "<div class='price-card'>" +
             "<p><strong>" + product.brand + "</strong> · " + product.manufacturer + "</p>" +
@@ -232,39 +306,52 @@
       if (result.status === "reject") {
         resultBox.innerHTML =
           "<h2>Not a match</h2>" +
+          identified +
           "<p>" + result.message + "</p>" +
           "<p>No price is shown. The closest listing is " + result.product.brand + ".</p>";
         return;
       }
 
       if (result.status === "blocked") {
-        resultBox.innerHTML = "<h2>Not available here</h2><p>" + result.message + "</p>";
+        resultBox.innerHTML = "<h2>Not available here</h2>" + identified + "<p>" + result.message + "</p>";
         return;
       }
 
       var heading = result.status === "unknown" ? "Not in the sample table" : "Need more detail";
-      resultBox.innerHTML = "<h2>" + heading + "</h2><p>" + result.message + "</p>";
+      resultBox.innerHTML = "<h2>" + heading + "</h2>" + identified + "<p>" + result.message + "</p>";
     }
 
-    function lookupFromForm() {
-      renderResult(window.MedFinder.matchDrug({
+    function lookupFromForm(source) {
+      var input = {
         name: fieldValue("name"),
         strength: fieldValue("strength"),
         form: fieldValue("form"),
         release: fieldValue("release")
-      }));
+      };
+      track(source === "example" ? "clicked_example" : "clicked_find_equivalent", {
+        drug_name: input.name,
+        strength: input.strength
+      });
+      output.hidden = false;
+      resultBox.className = "result unknown";
+      resultBox.innerHTML = "<h2>Checking RxNorm</h2><p>Looking up that name. The match rules run after the ID comes back.</p>";
+      return lookupRxNorm(input.name, input.strength).then(function (identity) {
+        var result = window.MedFinder.matchDrug(input);
+        track("showed_result", { status: result.status, rxcui: identity && identity.rxcui ? identity.rxcui : "" });
+        renderResult(result, identity);
+      });
     }
 
     document.querySelectorAll(".example").forEach(function (button) {
       button.addEventListener("click", function () {
         fillExample(button);
-        lookupFromForm();
+        lookupFromForm("example");
       });
     });
 
     form.addEventListener("submit", function (event) {
       event.preventDefault();
-      lookupFromForm();
+      lookupFromForm("form");
     });
 
     document.getElementById("run-checks").addEventListener("click", function () {
