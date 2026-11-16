@@ -7,7 +7,7 @@ var path = require("path");
 
 var PORT = Number(process.env.PORT) || 8787;
 var ROOT = __dirname;
-var MODEL = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini:online";
+var MODEL = process.env.OPENROUTER_MODEL || "perplexity/sonar";
 
 loadEnv(path.join(ROOT, ".env"));
 
@@ -126,6 +126,28 @@ function parseModelJson(text) {
   return JSON.parse(raw.slice(start, end + 1));
 }
 
+function keepLivePages(rows) {
+  return Promise.all(rows.map(function (row) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, 8000);
+    return fetch(row.pageUrl, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0" }
+    }).then(function (response) {
+      clearTimeout(timer);
+      if (response.body && response.body.cancel) response.body.cancel();
+      return response.status >= 200 && response.status < 400 ? row : null;
+    }).catch(function () {
+      clearTimeout(timer);
+      return null;
+    });
+  })).then(function (checked) {
+    return checked.filter(Boolean);
+  });
+}
+
 function askModel(input) {
   var key = process.env.OPENROUTER_API_KEY;
   if (!key) {
@@ -133,15 +155,23 @@ function askModel(input) {
   }
 
   var instructions = [
-    "Find public India e-commerce listings for this medicine.",
+    "Search Indian online pharmacies for this medicine.",
     "Return only JSON: {\"suppliers\":[...]}.",
     "Each item needs supplier, brand, ingredient, salt, strengthValue, strengthUnit, form, release, packCount, packPrice, currency, shippingAmount, shippingKind, shippingBasis, pageUrl.",
-    "form is tablet, capsule, or injection. release is IR or ER. currency is INR or USD.",
-    "shippingKind is page when the seller page states shipping, estimate when you are estimating, or unstated when you cannot support a figure.",
-    "If shippingKind is unstated, shippingAmount must be null.",
+    "salt is calcium, sodium, hydrochloride, succinate, or tartrate.",
+    "form is tablet, capsule, or injection. release is IR or ER. currency is INR.",
+    "shippingKind is page, estimate, or unstated. If shipping is not stated, shippingKind is unstated and shippingAmount is null.",
     "If shippingKind is estimate, shippingBasis must explain the basis in one sentence.",
-    "pageUrl must be an https page you found. Do not invent a URL, a price, or a shipping figure.",
-    "Return at most five suppliers. If you find none, return an empty suppliers array."
+    "Use only https URLs from 1mg.com, pharmeasy.in, netmeds.com, or apollopharmacy.in that appear in search results.",
+    "Do not invent a URL, a price, or a shipping figure. If you cannot find a page, return an empty suppliers array."
+  ].join(" ");
+  var question = [
+    "Find up to 3 current listings sold in India for",
+    input.name || "",
+    input.strength || "",
+    input.form || "",
+    (input.release || "") + ".",
+    input.rxnormName ? "The standardized name is " + input.rxnormName + "." : ""
   ].join(" ");
 
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -155,7 +185,7 @@ function askModel(input) {
       temperature: 0,
       messages: [
         { role: "system", content: instructions },
-        { role: "user", content: JSON.stringify(input) }
+        { role: "user", content: question }
       ]
     })
   }).then(function (response) {
@@ -170,7 +200,8 @@ function askModel(input) {
       } catch (error) {
         parsed = { suppliers: [] };
       }
-      var suppliers = (parsed.suppliers || []).map(cleanSupplier).filter(Boolean).slice(0, 5);
+      var candidates = (parsed.suppliers || []).map(cleanSupplier).filter(Boolean).slice(0, 5);
+      return keepLivePages(candidates).then(function (suppliers) {
       var cost = payload && payload.usage && payload.usage.cost;
       return {
         ok: true,
@@ -179,6 +210,7 @@ function askModel(input) {
         model: MODEL,
         costUsd: typeof cost === "number" ? cost : null
       };
+      });
     });
   }).catch(function () {
     return { ok: false, reason: "model_error", suppliers: [], model: MODEL, costUsd: null };

@@ -207,7 +207,7 @@
       supplier: String(row.supplier || "").trim(),
       brand: String(row.brand || "").trim(),
       ingredient: ingredientKey(row.ingredient),
-      salt: canonicalSalt(row.salt),
+      salt: saltFromText(row.salt) || saltFromText(row.ingredient) || canonicalSalt(row.salt),
       strength: supplierStrength(row),
       form: normalizeForm(row.form),
       release: normalizeRelease(row.release),
