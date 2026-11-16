@@ -5,7 +5,7 @@
 ## 1. Project Overview
 - **What this repo builds:** MedFinder. A typed drug is identified with RxNorm, then rules either show an Indian equivalent with a US price and a 90-day landed cost, or name the rule that failed.
 - **Primary user & core workflow:** A classmate or friend on a long-term prescription. See the living PRD in `docs/index.html`. The one workflow is prescription drug in, verified Indian equivalent and landed cost out.
-- **Tech stack:** Static HTML and JavaScript. `prototype/catalog.js` is the drug table. `prototype/match.js` is the only match decision. `prototype/index.html` calls `https://rxnav.nlm.nih.gov/REST/drugs.json` and renders the result. The same three files are copied to `docs/prototype/` for GitHub Pages. PostHog pageviews and clicks are wired on the product page and the prototype; paste the public `phc_` key into `MEDFINDER_POSTHOG_KEY` on both pages. No secret is required for RxNorm. Photo upload is still a later step.
+- **Tech stack:** Static HTML and JavaScript. `prototype/catalog.js` is the drug table. `prototype/match.js` is the only match decision. `prototype/index.html` calls `https://rxnav.nlm.nih.gov/REST/drugs.json` and renders the result. The same three files are copied to `docs/prototype/` for GitHub Pages. PostHog pageviews and clicks are installed on the product page and the prototype through `MEDFINDER_POSTHOG_KEY`. No secret is required for RxNorm. Photo upload is still a later step.
 
 ## 2. Commands
 - **Install dependencies:** None.
