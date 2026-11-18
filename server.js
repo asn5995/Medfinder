@@ -4,6 +4,7 @@
 var http = require("http");
 var fs = require("fs");
 var path = require("path");
+var extractorLib = require("./lib/extractor.js");
 
 var PORT = Number(process.env.PORT) || 8787;
 var ROOT = __dirname;
@@ -58,27 +59,36 @@ function sendJson(response, status, body) {
   response.end(payload);
 }
 
-function readBody(request) {
+function readBody(request, limit) {
+  var max = limit || 100000;
   return new Promise(function (resolve, reject) {
     var chunks = [];
     var size = 0;
+    var settled = false;
+    function finish(error, value) {
+      if (settled) return;
+      settled = true;
+      if (error) reject(error);
+      else resolve(value);
+    }
     request.on("data", function (chunk) {
+      if (settled) return;
       size += chunk.length;
-      if (size > 100000) {
-        reject(new Error("body too large"));
-        request.destroy();
+      if (size > max) {
+        finish(new Error("body too large"));
         return;
       }
       chunks.push(chunk);
     });
     request.on("end", function () {
+      if (settled) return;
       try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
+        finish(null, JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
       } catch (error) {
-        reject(error);
+        finish(error);
       }
     });
-    request.on("error", reject);
+    request.on("error", function (error) { finish(error); });
   });
 }
 
@@ -272,8 +282,31 @@ function safeFile(urlPath) {
   return file;
 }
 
-var server = http.createServer(function (request, response) {
+function createServer(options) {
+  var opts = options || {};
+  var extractor = opts.extractor || extractorLib.createPrescriptionExtractor(extractorLib.createOpenRouterClient());
+  var extractLimit = opts.extractLimit || 12000000;
+  return http.createServer(function (request, response) {
   var url = new URL(request.url, "http://127.0.0.1:" + PORT);
+  if (request.method === "POST" && url.pathname === "/extract") {
+    readBody(request, extractLimit).then(function (body) {
+      return extractor.extract(body).then(function (result) {
+        sendJson(response, 200, result);
+      });
+    }).catch(function (error) {
+      var tooLarge = error && error.message === "body too large";
+      sendJson(response, 400, {
+        status: "invalid_file",
+        medications: [],
+        reason: tooLarge ? "file_too_large" : "bad_request",
+        message: tooLarge
+          ? "That file is too large. Upload a photo or PDF under 8 MB."
+          : "The upload could not be read. Try a JPG, PNG, WEBP, GIF, or PDF."
+      });
+    });
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/listings") {
     readBody(request).then(function (body) {
       if (isBlocked(body.name)) {
@@ -324,8 +357,13 @@ var server = http.createServer(function (request, response) {
       response.end(request.method === "HEAD" ? undefined : data);
     });
   });
-});
+  });
+}
 
-server.listen(PORT, "127.0.0.1", function () {
-  console.log("MedFinder is at http://127.0.0.1:" + PORT + "/prototype/");
-});
+if (require.main === module) {
+  createServer().listen(PORT, "127.0.0.1", function () {
+    console.log("MedFinder is at http://127.0.0.1:" + PORT + "/prototype/");
+  });
+}
+
+module.exports = { createServer: createServer };
