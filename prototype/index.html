@@ -3,7 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MedFinder prototype</title>
+  <title>MedFinder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script>
+    try {
+      if (localStorage.getItem("medfinder-theme") === "light") {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    } catch (error) {}
+  </script>
   <script>
     !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageViewId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
     var MEDFINDER_POSTHOG_KEY = "phc_qtu6LHpuxNc27dymLyG5cifqUzb3qzqCN8A26DiyTDGJ";
@@ -20,75 +30,277 @@
   </script>
   <style>
     :root {
-      --bg: #fafafa;
-      --card: #ffffff;
-      --text: #111827;
-      --muted: #4b5563;
-      --border: #e5e7eb;
-      --accent: #1d63dc;
-      --exact: #166534;
-      --exact-bg: #f0fdf4;
-      --reject: #92400e;
-      --reject-bg: #fffbeb;
-      --blocked: #991b1b;
-      --blocked-bg: #fef2f2;
-      --unknown: #374151;
-      --unknown-bg: #f3f4f6;
+      --bg: #0d0f12;
+      --bg-elev: #14171c;
+      --card: #161a20;
+      --text: #f4f0e8;
+      --muted: #a79f94;
+      --gold: #d4a24c;
+      --gold-soft: #e7c98a;
+      --line: rgba(244, 240, 232, 0.12);
+      --blue: #8eacd0;
+      --band: #3d2c1c;
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+      --exact: #b7e4c7;
+      --exact-bg: #13241c;
+      --reject: #f0d7b0;
+      --reject-bg: #2a2116;
+      --blocked: #f0c4c4;
+      --blocked-bg: #2a1717;
+      --unknown: #e7e1d6;
+      --unknown-bg: #1c2026;
+      --nav: rgba(13, 15, 18, 0.86);
+      color-scheme: dark;
+    }
+    html[data-theme="light"] {
+      --bg: #f7f3ec;
+      --bg-elev: #fffdf8;
+      --card: #fffdf8;
+      --text: #1c1915;
+      --muted: #5e564c;
+      --gold: #8d6232;
+      --gold-soft: #8d6232;
+      --line: rgba(28, 25, 21, 0.12);
+      --blue: #3d6294;
+      --band: #4a3424;
+      --shadow: 0 16px 40px rgba(60, 40, 20, 0.08);
+      --exact: #14532d;
+      --exact-bg: #eef8f1;
+      --reject: #7c4a12;
+      --reject-bg: #fbf3e4;
+      --blocked: #8f2d2d;
+      --blocked-bg: #fdecec;
+      --unknown: #3f3a34;
+      --unknown-bg: #f3eee6;
+      --nav: rgba(247, 243, 236, 0.9);
+      color-scheme: light;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: "Outfit", "Segoe UI", sans-serif;
+      font-weight: 400;
       background: var(--bg);
       color: var(--text);
-      line-height: 1.5;
+      line-height: 1.6;
     }
-    .wrap {
-      max-width: 880px;
+    a { color: var(--gold-soft); }
+    .topnav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      max-width: 1120px;
       margin: 0 auto;
-      padding: 32px 20px 64px;
+      padding: 18px 28px;
+      background: var(--nav);
+      backdrop-filter: blur(16px);
     }
-    h1 {
-      font-size: 32px;
+    .wordmark {
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: -0.04em;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .wordmark span { color: var(--gold); }
+    .nav-links {
+      display: flex;
+      justify-content: center;
+      gap: 22px;
+      flex: 1;
+    }
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 400;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-end { display: flex; align-items: center; gap: 10px; }
+    .icon-btn, .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--blue);
+      background: transparent;
+      color: var(--text);
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .icon-btn { width: 36px; padding: 0; }
+    .icon-btn svg { width: 18px; height: 18px; stroke: var(--gold); fill: none; stroke-width: 1.7; stroke-linecap: round; }
+    .nav-cta { padding: 0 14px; font-size: 14px; font-weight: 500; }
+    .nav-cta:hover, .icon-btn:hover { background: rgba(142, 172, 208, 0.12); }
+    html:not([data-theme="light"]) .icon-btn .moon { display: none; }
+    html[data-theme="light"] .icon-btn .sun { display: none; }
+    .hero {
+      position: relative;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 72px 28px 36px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr);
+      gap: 24px;
+      align-items: center;
+      overflow: hidden;
+    }
+    .pill {
+      display: inline-block;
+      margin: 0 0 22px;
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.04em;
+    }
+    .hero h1 {
+      margin: 0 0 18px;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-weight: 500;
+      font-size: clamp(52px, 7vw, 84px);
+      line-height: 0.92;
+      letter-spacing: -0.03em;
+    }
+    .hero-sub {
+      max-width: 560px;
+      margin: 0 0 10px;
+      color: var(--gold-soft);
+      font-size: 18px;
+    }
+    .hero-note { max-width: 560px; margin-bottom: 28px; }
+    .hero-actions { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+    .text-link { color: var(--muted); text-decoration: none; font-size: 15px; }
+    .text-link:hover { color: var(--text); }
+    .hero-art { position: relative; min-height: 420px; }
+    .hero-art svg { width: 140%; height: 140%; position: absolute; right: -18%; top: -16%; }
+    .eyebrow {
+      margin: 0 0 22px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+    .partners { padding: 28px 28px 10px; }
+    .partner-row {
+      display: flex;
+      justify-content: center;
+      gap: 42px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      opacity: 0.72;
+      font-size: 22px;
+      letter-spacing: 0.08em;
+      text-transform: lowercase;
+    }
+    .stats {
+      margin-top: 48px;
+      background: var(--band);
+      color: #f6f1e8;
+      padding: 64px 28px;
+    }
+    .stats .eyebrow { color: rgba(246, 241, 232, 0.62); }
+    .stat-row {
+      max-width: 980px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+      text-align: center;
+    }
+    .stat-num {
+      margin: 0;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 72px;
+      line-height: 1;
+      color: var(--gold);
+      font-weight: 500;
+    }
+    .stat-label { margin: 10px 0 6px; font-weight: 500; color: #f6f1e8; }
+    .stat-note { margin: 0 auto; max-width: 240px; color: rgba(246, 241, 232, 0.72); font-size: 14px; }
+    .promise { max-width: 1040px; margin: 0 auto; padding: 88px 28px 36px; text-align: center; }
+    .promise h2 {
+      margin: 0 0 12px;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-weight: 500;
+      font-size: clamp(36px, 5vw, 52px);
+      letter-spacing: -0.03em;
+    }
+    .promise .lede { max-width: 640px; margin: 0 auto 36px; }
+    .card-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; text-align: left; }
+    .feature-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 26px 22px 22px;
+      box-shadow: var(--shadow);
+    }
+    .feature-card svg { width: 28px; height: 28px; stroke: var(--gold); fill: none; stroke-width: 1.4; }
+    .feature-card h3 {
+      margin: 16px 0 8px;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 28px;
+      font-weight: 500;
+    }
+    .feature-card p { margin: 0; color: var(--muted); font-size: 14px; }
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 12px 20px 80px;
+    }
+    .wrap > section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 26px 26px 22px;
+      margin-bottom: 18px;
+      box-shadow: var(--shadow);
+      scroll-margin-top: 84px;
+    }
+    .wrap h2 {
+      margin: 0 0 10px;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 36px;
+      font-weight: 500;
       letter-spacing: -0.02em;
-      margin: 0 0 8px;
     }
-    h2 { font-size: 18px; margin: 0 0 12px; }
     p { margin: 0 0 12px; }
-    .lede { color: var(--muted); margin-bottom: 20px; }
-    section {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
-    }
+    .lede { color: var(--muted); margin-bottom: 18px; }
     .examples { display: flex; flex-wrap: wrap; gap: 8px; }
-    button, select, input {
-      font: inherit;
-    }
+    button, select, input { font: inherit; color: inherit; }
     button {
-      border: 1px solid var(--border);
-      background: var(--card);
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
       border-radius: 8px;
       padding: 8px 12px;
       cursor: pointer;
     }
+    button:hover { border-color: var(--muted); }
     button.primary {
-      background: var(--accent);
-      color: white;
-      border-color: var(--accent);
-      font-weight: 600;
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--blue);
+      font-weight: 500;
     }
-    button:focus-visible, input:focus-visible, select:focus-visible {
-      outline: 2px solid var(--accent);
+    button.primary:hover { background: rgba(142, 172, 208, 0.14); }
+    button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+      outline: 2px solid var(--gold);
       outline-offset: 2px;
     }
     label {
       display: block;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       margin-bottom: 4px;
+      color: var(--muted);
     }
     .fields {
       display: grid;
@@ -98,15 +310,17 @@
     }
     input, select {
       width: 100%;
-      border: 1px solid var(--border);
+      border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 8px 10px;
-      background: white;
+      padding: 9px 10px;
+      background: var(--bg);
+      color: var(--text);
     }
+    input[type="file"] { padding: 8px; background: transparent; }
     .result {
-      border-radius: 10px;
-      padding: 14px 16px;
-      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
     }
     .result.exact { background: var(--exact-bg); color: var(--exact); }
     .result.reject { background: var(--reject-bg); color: var(--reject); }
@@ -115,63 +329,177 @@
     .result h2 { color: inherit; }
     .price-card {
       margin-top: 12px;
-      background: white;
+      background: var(--bg-elev);
       color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
     }
     .price-card p { margin-bottom: 6px; }
-    .landed { font-size: 20px; font-weight: 700; }
-    .disclaimer {
-      font-size: 13px;
-      color: var(--muted);
+    .landed {
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 28px;
+      font-weight: 500;
+      color: var(--gold);
+      line-height: 1.15;
     }
+    .disclaimer { font-size: 13px; color: var(--muted); }
     .check-list { list-style: none; padding: 0; margin: 12px 0 0; }
     .check-list li {
-      padding: 6px 0;
-      border-top: 1px solid var(--border);
+      padding: 8px 0;
+      border-top: 1px solid var(--line);
       font-size: 14px;
     }
-    .pass { color: var(--exact); font-weight: 700; }
-    .fail { color: var(--blocked); font-weight: 700; }
+    .pass { color: var(--gold); font-weight: 600; }
+    .fail { color: #e07a7a; font-weight: 600; }
     .hint { color: var(--muted); font-size: 14px; }
     .notice {
-      background: #eff6ff;
-      border: 1px solid #bfdbfe;
-      border-radius: 8px;
-      padding: 10px 12px;
+      background: rgba(212, 162, 76, 0.1);
+      border: 1px solid rgba(212, 162, 76, 0.35);
+      border-radius: 12px;
+      padding: 12px 14px;
       margin-bottom: 10px;
     }
     .row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 8px; }
     .fields-med { grid-template-columns: 1.3fr 0.8fr 0.9fr 0.8fr 0.6fr; }
     .fields-order { grid-template-columns: 1.3fr 0.7fr 0.8fr 1.2fr; }
-    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 12px; }
-    .cal-head { text-align: center; font-size: 12px; color: var(--muted); font-weight: 700; }
+    .cal-nav { align-items: center; justify-content: space-between; flex-wrap: nowrap; }
+    .cal-nav strong { font-family: "Cormorant Garamond", Georgia, serif; font-size: 28px; font-weight: 500; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 14px; }
+    .cal-head { text-align: center; font-size: 12px; color: var(--muted); font-weight: 500; }
     .cal-day {
-      min-height: 58px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 4px;
+      min-height: 64px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 6px;
       font-size: 12px;
-      background: white;
+      background: var(--bg);
     }
-    .cal-day.out { opacity: 0.4; }
-    .cal-day.due { background: #eff6ff; border-color: var(--accent); }
-    .cal-mark { display: block; color: var(--accent); overflow: hidden; white-space: nowrap; }
-    @media (max-width: 700px) {
-      .fields, .fields-med { grid-template-columns: 1fr 1fr; }
-      .cal-day { min-height: 42px; }
+    .cal-day.out { opacity: 0.38; }
+    .cal-day.due { background: rgba(212, 162, 76, 0.14); border-color: var(--gold); }
+    .cal-mark { display: block; color: var(--gold); overflow: hidden; white-space: nowrap; }
+    .closing {
+      text-align: center;
+      color: var(--muted);
+      padding-bottom: 28px;
+    }
+    .closing a { text-decoration: none; }
+    @media (max-width: 800px) {
+      .topnav { flex-wrap: wrap; gap: 12px; padding: 14px 16px; }
+      .nav-links { order: 3; flex: 1 1 100%; justify-content: flex-start; gap: 14px; overflow-x: auto; }
+      .hero { grid-template-columns: 1fr; padding: 36px 16px 12px; }
+      .hero-art { min-height: 180px; }
+      .hero-art svg { width: 100%; height: 180px; position: relative; right: auto; top: auto; }
+      .stat-row, .card-row { grid-template-columns: 1fr; }
+      .stat-num { font-size: 56px; }
+      .fields, .fields-med, .fields-order { grid-template-columns: 1fr 1fr; }
+      .wrap > section { padding: 18px 16px; }
+      .cal-nav { gap: 6px; }
+      .cal-nav button { padding: 8px 8px; font-size: 13px; }
+      .cal-nav strong { font-size: 22px; }
+      .cal-day { min-height: 46px; }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>MedFinder</h1>
-      <p class="lede">Type a drug, or upload a prescription. RxNorm identifies a typed name. When the local server is running, the page lists India e-commerce suppliers and a US price for the same 90 units, plus the savings. A saved medicine can be ordered from a ranked seller, and the next refill shows on the calendar. Otherwise the sample catalog and the demo sellers are shown. A mismatch shows the failed rule and no price.</p>
-    </header>
+  <nav class="topnav">
+    <a class="wordmark" href="#top">medfinder<span>.</span></a>
+    <div class="nav-links">
+      <a href="#find">Find</a>
+      <a href="#prescription">Prescription</a>
+      <a href="#calendar">Calendar</a>
+      <a href="#sellers">Sellers</a>
+      <a href="#rules">Rules</a>
+    </div>
+    <div class="nav-end">
+      <button type="button" class="icon-btn" id="theme-toggle" aria-label="Toggle color theme" aria-pressed="false">
+        <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.2v2.4M12 18.4v2.4M4.8 4.8l1.7 1.7M17.5 17.5l1.7 1.7M3.2 12h2.4M18.4 12h2.4M4.8 19.2l1.7-1.7M17.5 6.5l1.7-1.7"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg>
+      </button>
+      <a class="nav-cta" href="#find">Find a match</a>
+    </div>
+  </nav>
 
+  <header class="hero" id="top">
+    <div>
+      <p class="pill">Long-term prescriptions. Rules included.</p>
+      <h1>The same medicine,<br>a clearer price.</h1>
+      <p class="hero-sub">Type a drug, or upload a prescription.</p>
+      <p class="lede hero-note">RxNorm identifies a typed name. When the local server is running, the page lists India e-commerce suppliers and a US price for the same 90 units, plus the savings. A saved medicine can be ordered from a ranked seller, and the next refill shows on the calendar. Otherwise the sample catalog and the demo sellers are shown. A mismatch shows the failed rule and no price.</p>
+      <div class="hero-actions">
+        <a class="nav-cta" href="#find">Find equivalent →</a>
+        <a class="text-link" href="#prescription">Upload a prescription</a>
+      </div>
+    </div>
+    <div class="hero-art" aria-hidden="true">
+      <svg viewBox="0 0 640 760">
+        <defs>
+          <linearGradient id="ribbon" x1="0.1" y1="0" x2="0.9" y2="1">
+            <stop offset="0" stop-color="#f4e2bf"/>
+            <stop offset="0.42" stop-color="#d4a24c"/>
+            <stop offset="1" stop-color="#5c3a1e"/>
+          </linearGradient>
+        </defs>
+        <path d="M430 -40C620 80 160 160 390 330C640 510 150 560 360 820" stroke="url(#ribbon)" stroke-width="108" fill="none" stroke-linecap="round"/>
+        <path d="M520 -20C690 140 250 230 470 410C710 600 250 640 430 860" stroke="url(#ribbon)" stroke-width="34" fill="none" stroke-linecap="round" opacity="0.55"/>
+      </svg>
+    </div>
+  </header>
+
+  <section class="partners">
+    <p class="eyebrow">Named sources, not invented pages</p>
+    <div class="partner-row">
+      <span>RxNorm</span>
+      <span>OpenRouter</span>
+      <span>Sample catalog</span>
+      <span>match.js</span>
+    </div>
+  </section>
+
+  <section class="stats">
+    <p class="eyebrow">Settings on this page, not a clinical claim</p>
+    <div class="stat-row">
+      <div>
+        <p class="stat-num">5</p>
+        <p class="stat-label">Fields that must agree</p>
+        <p class="stat-note">Ingredient, salt, strength, form, and release. A miss shows the rule and no price.</p>
+      </div>
+      <div>
+        <p class="stat-num">60</p>
+        <p class="stat-label">Day default supply</p>
+        <p class="stat-note">A maintenance fill is treated as ongoing. Change the length on the order.</p>
+      </div>
+      <div>
+        <p class="stat-num">20</p>
+        <p class="stat-label">Days before a reminder</p>
+        <p class="stat-note">The notice stays in this page. The lead time is editable per order.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="promise">
+    <h2>A match, without compromise.</h2>
+    <p class="lede">The reader can fill a prescription. It does not decide the match. Ranking favors a longer record over one new five-star rating.</p>
+    <div class="card-row">
+      <article class="feature-card">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M8 13h8M8 17h5"/></svg>
+        <h3>Upload a prescription</h3>
+        <p>A photo or PDF is read into medicine, strength, frequency, and quantity. You confirm or edit before anything is saved.</p>
+      </article>
+      <article class="feature-card">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>
+        <h3>Refill reminders</h3>
+        <p>The next refill is the supply length after the order. A reminder appears 20 days before that date unless you change the lead.</p>
+      </article>
+      <article class="feature-card">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.4 5.2L20 9.2l-4 3.8.9 5.5L12 16.8 7.1 18.5 8 13 4 9.2l5.6-.9L12 3z"/></svg>
+        <h3>Top-rated sellers</h3>
+        <p>One rating per fulfilled order. A smoothed score keeps a new five-star seller from jumping ahead of a longer record.</p>
+      </article>
+    </div>
+  </section>
+
+  <div class="wrap">
     <section>
       <h2>Examples</h2>
       <div class="examples">
@@ -183,7 +511,7 @@
       </div>
     </section>
 
-    <section>
+    <section id="find">
       <h2>Find an equivalent</h2>
       <form id="lookup">
         <div class="fields">
@@ -219,7 +547,7 @@
       <div id="result" class="result" aria-live="polite"></div>
     </section>
 
-    <section>
+    <section id="prescription">
       <h2>Prescription</h2>
       <p class="lede">Upload a photo or PDF. The reader fills the medicine, strength, frequency, and quantity when it can see them. Check or edit the fields, then save. An unreadable file or a file that is not a prescription stays unsaved.</p>
       <label for="rx-file">Photo or PDF</label>
@@ -239,7 +567,7 @@
       <div id="saved-list"></div>
     </section>
 
-    <section>
+    <section id="orders">
       <h2>Orders and refills</h2>
       <p class="lede">Maintenance medicines are treated as ongoing. The next refill is the supply length after the order date. The default supply is 60 days, and the default reminder is 20 days before that date. An order here is a planning record. MedFinder does not take payment or ship medicine.</p>
       <label for="patient-name">Patient</label>
@@ -270,9 +598,9 @@
       <div id="order-list"></div>
     </section>
 
-    <section>
+    <section id="calendar">
       <h2>Refill calendar</h2>
-      <div class="row-actions">
+      <div class="row-actions cal-nav">
         <button type="button" id="cal-prev">Previous month</button>
         <strong id="cal-label"></strong>
         <button type="button" id="cal-next">Next month</button>
@@ -281,13 +609,13 @@
       <ul id="cal-list" class="check-list"></ul>
     </section>
 
-    <section>
+    <section id="reminders">
       <h2>Reminders</h2>
       <p class="hint">Reminders stay in this page. Email and phone push are not connected. The same reminder text can be handed to an email or push provider once a patient address or a push subscription exists, by running the reminder check once a day.</p>
       <div id="reminder-list"></div>
     </section>
 
-    <section>
+    <section id="sellers">
       <h2>Sellers</h2>
       <p class="lede">After an order is fulfilled, rate that seller once. Ranking uses a smoothed average, so one 5-star rating does not put a new seller first. Higher scores are listed first and receive more orders when ranking assigns one. The reviews below are demo data.</p>
       <div id="seller-list"></div>
@@ -297,12 +625,13 @@
       </div>
     </section>
 
-    <section>
+    <section id="rules">
       <h2>Rule checks</h2>
       <p class="lede">These cases confirm a match, a strength miss, a salt and release miss, and a blocked drug. Nothing here calls a model.</p>
       <button type="button" id="run-checks">Check rules</button>
       <ul id="checks" class="check-list"></ul>
     </section>
+    <p class="closing">Ready to check a medicine? <a href="#find">Find an equivalent</a></p>
   </div>
 
   <script src="catalog.js"></script>
@@ -313,6 +642,17 @@
   <script src="clinic.js"></script>
   <script src="clinic-ui.js"></script>
   <script>
+    document.getElementById("theme-toggle").addEventListener("click", function () {
+      var light = document.documentElement.getAttribute("data-theme") === "light";
+      if (light) document.documentElement.removeAttribute("data-theme");
+      else document.documentElement.setAttribute("data-theme", "light");
+      this.setAttribute("aria-pressed", light ? "false" : "true");
+      try { localStorage.setItem("medfinder-theme", light ? "dark" : "light"); } catch (error) {}
+    });
+    if (document.documentElement.getAttribute("data-theme") === "light") {
+      document.getElementById("theme-toggle").setAttribute("aria-pressed", "true");
+    }
+
     var form = document.getElementById("lookup");
     var output = document.getElementById("output");
     var resultBox = document.getElementById("result");
