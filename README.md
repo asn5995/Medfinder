@@ -1,45 +1,116 @@
-# [Project Name]
+# MedFinder
 
-> **One-line pitch:** [Who is this for, and what job does it do for them?]
+> **One-line pitch:** A classmate on a long-term prescription can confirm the medicine, see a verified Indian equivalent and a landed cost, and keep the next refill on a calendar.
 
-- **Builder:** [Your Name] (`@github-handle`)
-- **Pod:** [Pod Name / Number]
-- **Product Page & Living PRD:** [Add your GitHub Pages URL]
-- **App:** runs locally through Week 4; add a cloud URL in Build 5.
+- **Builder:** Anirudh (`asn5995`)
+- **Course:** NYU Stern, Building with AI, Fall 2026
+- **Product page:** [asn5995.github.io/Medfinder](https://asn5995.github.io/Medfinder/)
+- **Prototype:** runs locally with `node server.js`. GitHub Pages publishes `docs/` and has no API key.
 
-## Start here: Build 1
+## What exists today
 
-**Due Monday, November 9 at noon, New York time.** No class November 3; keep building that week.
+The app is static HTML and JavaScript, plus one Node server. There is no database, no account system, and no compile step.
 
-1. Join the [class organization](https://github.com/building-with-ai-f26), then use this template to create a **public** repo named `<netid>-<project-slug>`. Ask Christian or Hew if the organization is missing from the owner list.
-2. Set up Git and one coding agent during the week of October 27. Follow the [Icerynk setup guide](https://www.icerynk.com/c/fa26-tech-gb-2160-dm2-f2/content/pre-class-setup-github-openrouter-your-coding-agent).
-3. Publish [`docs/index.html`](./docs/index.html): **Settings → Pages → Deploy from a branch → main → /docs → Save**. When deployment finishes, open `https://building-with-ai-f26.github.io/<your-repo-name>/`.
-4. Fill in PRD v1: a reachable user, their painful before/after workflow, one core workflow, and three non-goals.
-5. Build a rough local prototype. Add a screenshot or GIF and an honest Build 1 log to the Product Page, including progress, learning, problems, costs, and hours.
-6. Push meaningful commits on **at least two separate days each week outside class**, including the November 3 break.
-7. Submit your **Product Page URL and repository URL in Icerynk**. Come ready to demo the prototype in two minutes on November 10.
+A typed drug is identified with RxNorm. `prototype/match.js` then accepts or rejects a row only when the ingredient, salt, strength, form, and release agree. `prototype/catalog.js` is the sample table used when the server has no key or no live page comes back. `server.js` asks OpenRouter for public India pharmacy listings and a US price. The key stays in `.env`.
 
-Create your PostHog account in Week 1. Install it on the Product Page and local app in **Build 2**, then verify events. The Product Page is public from Build 1; the app can stay local through Week 4.
+Patients, orders, and sellers were not stored before this change. The page did not read a prescription photo, schedule a refill, or rank a seller. Those three pieces are now local records in the browser, with the decisions in plain JavaScript files the tests can run without a network call.
 
-## Repository map
-
-| File / folder | Purpose |
-| --- | --- |
-| [`docs/index.html`](./docs/index.html) | Required public pitch, living PRD, and weekly build log. Update with actual work and evidence. |
-| [`Intent.md`](./Intent.md), [`Plan.md`](./Plan.md), [`journal/`](./journal/) | Optional drafting aids. No duplicate submission is required. |
-| [`AGENTS.md`](./AGENTS.md) | Local run commands, project context, and agent rules. Build 2 onward. |
-| [`tests/`](./tests/) | Verification guidance. Build 4 offers Track A domain evals **or** Track B user replays. |
-| [`SPONSOR_MEMO.md`](./SPONSOR_MEMO.md) | One-page recommendation backed by actual usage, full costs, and risks. Due December 14 at noon. |
-
-[Icerynk](https://www.icerynk.com/c/fa26-tech-gb-2160-dm2-f2/content) holds the assignment instructions and submissions.
+GitHub Pages deploys from the `docs/` folder on `main`. The prototype files are copied to `docs/prototype/`. PostHog records pageviews and clicks. The published prototype cannot read a prescription or list live suppliers, because it has no key.
 
 ## Local setup
 
-Clone **your own repository** and ask your coding agent to document the exact install and run commands here and in `AGENTS.md`.
+Node is the only dependency. From the repo root:
 
 ```bash
-git clone https://github.com/building-with-ai-f26/<your-repo-name>.git
-cd <your-repo-name>
+cp .env.example .env
+node server.js
 ```
 
-If your app needs API keys, use a local environment file such as `.env`. Keep private keys out of source code, browser code, screenshots, and commits. The template ignores `.env`; `.env.example` contains placeholders only.
+Open [http://127.0.0.1:8787/prototype/](http://127.0.0.1:8787/prototype/). Do not open the HTML file from the disk. A `file://` page cannot call RxNorm.
+
+Set `OPENROUTER_API_KEY` in `.env` before using live supplier search or prescription reading. Restart the server after changing `.env`.
+
+## Environment
+
+| Variable | Purpose |
+| --- | --- |
+| `OPENROUTER_API_KEY` | OpenRouter key for supplier search and prescription reading. Never commit it. |
+| `OPENROUTER_MODEL` | Supplier search model. Default `perplexity/sonar`. |
+| `OPENROUTER_EXTRACT_MODEL` | Prescription photo and PDF model. Default `google/gemini-2.5-flash`. It needs to accept images and PDFs. |
+
+`.env.example` lists the names only. The server reads `.env` at startup and does not send the key to the browser. The page does not store the uploaded file. The server forwards it to OpenRouter for that one request.
+
+Refill length and reminder lead time are not environment variables. They default to 60 days and 20 days, and each medicine or order can change them on the page.
+
+## Tests
+
+```bash
+node --test
+```
+
+That runs every file in `tests/`. It includes the 15 match-rule cases, prescription parsing with the model replaced by a fake `complete` function, refill and reminder dates, and seller ranking. Nothing in that command calls RxNorm or OpenRouter.
+
+On the prototype page, **Check rules** runs the same match cases in the browser.
+
+There is no separate build. `node --check` is enough to confirm a JavaScript file parses, and `node --test` is the suite to run before review.
+
+## Try the features
+
+1. **Prescription upload.** Choose a JPG, PNG, WEBP, GIF, or PDF and click **Read prescription**. Edit the medicine, strength, frequency, and quantity, then **Save prescription**. A blurry file, a file that is not a prescription, a missing key, or a stopped server leaves a message and an empty form instead of saving a guessed drug. **Enter by hand** does the same confirm step without a model call. Without a key, the reader says `OPENROUTER_API_KEY` is missing.
+2. **Refill calendar.** Save a medicine, set the supply length and the reminder lead, and place an order. The refill date is the order date plus the supply length. The reminder date is that refill date minus the lead time. **Load sample orders** shows an atorvastatin refill already inside the reminder window and a fulfilled metformin order. Open **Reminders** for the in-app notice, and move the calendar to the refill month.
+3. **Seller rating.** **Mark fulfilled** on an order, then save one rating of 1 to 5 stars and an optional comment. A second rating on that order is refused. Sellers are listed by ranking score. **Let ranking assign this order** draws a seller with probability proportional to that score, so a higher rank receives more of those orders.
+
+Sample orders replace the prescriptions and orders saved in this browser. **Clear this browser's saved data** removes them. The demo seller history stays.
+
+## Seller ranking
+
+A new seller with one 5-star rating should not jump ahead of a seller with a longer record. Each seller gets a smoothed rating and a smoothed fulfillment rate, then one score.
+
+```
+ratingAverage = (C × m + sum of stars) / (C + n)
+```
+
+`C` is 8 prior ratings and `m` is 3.5 stars. `n` is the number of real ratings, and the sum is those stars. A brand-new seller therefore sits at 3.5. One 5-star rating moves that seller only to `(8 × 3.5 + 5) / 9`, about 3.67, not to 5.
+
+```
+reliability = (R × p + fulfilled orders) / (R + assigned orders)
+```
+
+`R` is 6 prior orders and `p` is 0.8. Fulfilled orders are capped at the assigned count. A seller with no orders stays at 80 percent.
+
+```
+rankingScore = 0.7 × (ratingAverage / 5) + 0.3 × reliability
+```
+
+The page sorts sellers by `rankingScore`, highest first. The percentage on each card is that seller's score divided by the total of the scores. **Let ranking assign this order** draws one seller with that probability. Stars outside 1 to 5 are ignored. The six sellers in `prototype/sellers.js` are fictional demo history, not live pharmacy reviews. With that seed, the order is Apollo Pharmacy, Netmeds, PharmEasy, NewChem, CityMed, then MedPlus. NewChem's single 5-star review is not enough to pass the longer records. CityMed, with no reviews, stays above MedPlus, whose reviews and fulfillment are weaker than the prior.
+
+Ratings saved in this browser are added on top of that seed for the seller on the order.
+
+## Reminders
+
+The notice is in the page: "It's time to place another order…", or a line that the refill date has passed. Dismiss hides that notice in this browser. Placing a newer order for the same medicine and strength replaces the older refill, so the old reminder stops.
+
+Email and push are not set up. There is no mail provider, no patient inbox, and no push subscription. A daily job can call the same `reminders` function in `prototype/clinic.js` and send each notice's `message`. Email needs an address on the patient and a provider such as SMTP or Resend. Push needs a service worker, a browser subscription, and VAPID keys. Those values would go in `.env` when a provider is chosen. They are not read today.
+
+## Assumptions
+
+- One demo patient is stored in this browser under `medfinder-clinic-v1`. There is no login.
+- An order is a planning record. The app does not take payment or ship medicine. The patient marks an order fulfilled.
+- A maintenance medicine is treated as ongoing. The next refill is `supplyDays` after the order date, not after the fulfilled date. The default is 60 days. The quantity text is not turned into a day count, because the directions are free text. Set the supply length to the number of days the fill covers.
+- The reminder lead must be a whole number of days shorter than the supply. The default is 20.
+- The same medicine name and strength share one active refill. A different strength is tracked on its own.
+- Controlled substances and insulin stay blocked. `match.js` refuses those orders.
+- The ranked sellers are the demo list, plus ratings from this browser. A live supplier row from Find equivalent is not automatically added to that list.
+- Uploaded files are limited to about 8 MB and to JPEG, PNG, WEBP, GIF, and PDF.
+
+## Course map
+
+| File / folder | Purpose |
+| --- | --- |
+| [`docs/index.html`](./docs/index.html) | Public pitch, living PRD, and weekly build log. |
+| [`prototype/`](./prototype/) | Local app. Copied to `docs/prototype/` for GitHub Pages. |
+| [`server.js`](./server.js) | Local server for supplier search and prescription reading. |
+| [`tests/`](./tests/) | `node --test`, plus the Build 4 note. |
+| [`AGENTS.md`](./AGENTS.md) | Commands and agent rules. |
+
+[Icerynk](https://www.icerynk.com/c/fa26-tech-gb-2160-dm2-f2/content) holds the assignment instructions and submissions.

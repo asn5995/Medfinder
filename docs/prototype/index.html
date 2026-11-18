@@ -44,7 +44,7 @@
       line-height: 1.5;
     }
     .wrap {
-      max-width: 760px;
+      max-width: 880px;
       margin: 0 auto;
       padding: 32px 20px 64px;
     }
@@ -135,8 +135,33 @@
     }
     .pass { color: var(--exact); font-weight: 700; }
     .fail { color: var(--blocked); font-weight: 700; }
+    .hint { color: var(--muted); font-size: 14px; }
+    .notice {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+    .row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 8px; }
+    .fields-med { grid-template-columns: 1.3fr 0.8fr 0.9fr 0.8fr 0.6fr; }
+    .fields-order { grid-template-columns: 1.3fr 0.7fr 0.8fr 1.2fr; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 12px; }
+    .cal-head { text-align: center; font-size: 12px; color: var(--muted); font-weight: 700; }
+    .cal-day {
+      min-height: 58px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px;
+      font-size: 12px;
+      background: white;
+    }
+    .cal-day.out { opacity: 0.4; }
+    .cal-day.due { background: #eff6ff; border-color: var(--accent); }
+    .cal-mark { display: block; color: var(--accent); overflow: hidden; white-space: nowrap; }
     @media (max-width: 700px) {
-      .fields { grid-template-columns: 1fr 1fr; }
+      .fields, .fields-med { grid-template-columns: 1fr 1fr; }
+      .cal-day { min-height: 42px; }
     }
   </style>
 </head>
@@ -144,7 +169,7 @@
   <div class="wrap">
     <header>
       <h1>MedFinder</h1>
-      <p class="lede">Type a drug, or pick an example. RxNorm identifies the name. When the local server is running, the page lists India e-commerce suppliers and a US price for the same 90 units, plus the savings. Otherwise it shows the sample catalog. A mismatch shows the failed rule and no price.</p>
+      <p class="lede">Type a drug, or upload a prescription. RxNorm identifies a typed name. When the local server is running, the page lists India e-commerce suppliers and a US price for the same 90 units, plus the savings. A saved medicine can be ordered from a ranked seller, and the next refill shows on the calendar. Otherwise the sample catalog and the demo sellers are shown. A mismatch shows the failed rule and no price.</p>
     </header>
 
     <section>
@@ -195,6 +220,84 @@
     </section>
 
     <section>
+      <h2>Prescription</h2>
+      <p class="lede">Upload a photo or PDF. The reader fills the medicine, strength, frequency, and quantity when it can see them. Check or edit the fields, then save. An unreadable file or a file that is not a prescription stays unsaved.</p>
+      <label for="rx-file">Photo or PDF</label>
+      <input id="rx-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.pdf,.jpg,.jpeg,.png,.webp,.gif" />
+      <div class="row-actions">
+        <button type="button" class="primary" id="rx-read">Read prescription</button>
+        <button type="button" id="rx-manual">Enter by hand</button>
+      </div>
+      <p id="rx-message" class="hint" aria-live="polite"></p>
+      <div id="rx-review" hidden>
+        <div id="rx-meds"></div>
+        <div class="row-actions">
+          <button type="button" id="rx-add">Add a medicine</button>
+          <button type="button" class="primary" id="rx-save">Save prescription</button>
+        </div>
+      </div>
+      <div id="saved-list"></div>
+    </section>
+
+    <section>
+      <h2>Orders and refills</h2>
+      <p class="lede">Maintenance medicines are treated as ongoing. The next refill is the supply length after the order date. The default supply is 60 days, and the default reminder is 20 days before that date. An order here is a planning record. MedFinder does not take payment or ship medicine.</p>
+      <label for="patient-name">Patient</label>
+      <input id="patient-name" autocomplete="name" />
+      <div class="fields fields-order">
+        <div>
+          <label for="order-med">Saved medicine</label>
+          <select id="order-med"></select>
+        </div>
+        <div>
+          <label for="order-supply">Supply length (days)</label>
+          <input id="order-supply" type="number" min="1" max="365" value="60" />
+        </div>
+        <div>
+          <label for="order-lead">Reminder lead (days)</label>
+          <input id="order-lead" type="number" min="1" max="364" value="20" />
+        </div>
+        <div>
+          <label for="order-seller">Seller</label>
+          <select id="order-seller"></select>
+        </div>
+      </div>
+      <div class="row-actions">
+        <button type="button" class="primary" id="order-place">Place order with selected seller</button>
+        <button type="button" id="order-assign">Let ranking assign this order</button>
+      </div>
+      <p id="order-message" class="hint" aria-live="polite"></p>
+      <div id="order-list"></div>
+    </section>
+
+    <section>
+      <h2>Refill calendar</h2>
+      <div class="row-actions">
+        <button type="button" id="cal-prev">Previous month</button>
+        <strong id="cal-label"></strong>
+        <button type="button" id="cal-next">Next month</button>
+      </div>
+      <div id="cal-grid" class="cal-grid"></div>
+      <ul id="cal-list" class="check-list"></ul>
+    </section>
+
+    <section>
+      <h2>Reminders</h2>
+      <p class="hint">Reminders stay in this page. Email and phone push are not connected. The same reminder text can be handed to an email or push provider once a patient address or a push subscription exists, by running the reminder check once a day.</p>
+      <div id="reminder-list"></div>
+    </section>
+
+    <section>
+      <h2>Sellers</h2>
+      <p class="lede">After an order is fulfilled, rate that seller once. Ranking uses a smoothed average, so one 5-star rating does not put a new seller first. Higher scores are listed first and receive more orders when ranking assigns one. The reviews below are demo data.</p>
+      <div id="seller-list"></div>
+      <div class="row-actions">
+        <button type="button" id="load-sample">Load sample orders</button>
+        <button type="button" id="clear-clinic">Clear this browser's saved data</button>
+      </div>
+    </section>
+
+    <section>
       <h2>Rule checks</h2>
       <p class="lede">These cases confirm a match, a strength miss, a salt and release miss, and a blocked drug. Nothing here calls a model.</p>
       <button type="button" id="run-checks">Check rules</button>
@@ -204,6 +307,11 @@
 
   <script src="catalog.js"></script>
   <script src="match.js"></script>
+  <script src="refill.js"></script>
+  <script src="ranking.js"></script>
+  <script src="sellers.js"></script>
+  <script src="clinic.js"></script>
+  <script src="clinic-ui.js"></script>
   <script>
     var form = document.getElementById("lookup");
     var output = document.getElementById("output");
