@@ -20,3 +20,19 @@
 4. **Verify changes:** Run relevant checks. For a reproducible logic bug, use a failing test to demonstrate the fix when practical. Record manual checks and known limitations; follow the selected Build 4 evaluation track.
 5. **Zero secrets in code:** Never hardcode API keys, tokens, or credentials. Always read from environment variables (`.env`) and update `.env.example` when new variables are needed.
 6. **Stop when looping:** If a fix fails twice in a row, stop, summarize what failed, and ask the human before trying a third approach.
+7. **Update the public page when a feature ships.** The agent once shipped prescription upload and left the living PRD saying photo upload was not built. A change that reaches the published page has to update `docs/index.html` in the same change.
+
+## 4. Shipping
+- **Tests on every pull request:** `.github/workflows/test.yml` runs `npm audit --audit-level=high` and `node --test` on pull requests and on `main`.
+- **Preview and production:** `render.yaml` describes a free Render web service. A pull request can build a Render preview. Merging to `main` deploys production. The Render account is not connected until Anirudh says to connect it. If Render asks for a paid preview add-on, stop.
+- **Local server:** `node server.js` listens on `127.0.0.1:8787`. On Render, where `RENDER=true`, the same process listens on `0.0.0.0` and the port Render sets. Listening only on `127.0.0.1` would make the deployed site unreachable.
+- **Database:** `migrations/001_clinic.sql` is the schema. `node scripts/migrate.js` applies new files to `DATABASE_URL` and records them in `schema_migrations`. With no URL, it does nothing. With `MEDFINDER_DATABASE=production`, it refuses to change the database. The agent uses a development URL only. The browser keeps prescriptions and orders when the database is unset.
+- **Rollback:** In the Render dashboard, open the service, then Deploys, and roll back to the previous successful deploy. Or revert the bad commit on `main` and push that revert. Do not force-push `main`. Do not roll back by deleting rows.
+- **After a deploy:** Open the production URL, confirm the prototype loads, and confirm PostHog still records a pageview. The public `phc_` key is meant to be in the page. Session replay stays enabled.
+
+## 5. Ask me first
+Stop and ask Anirudh before any of these:
+- Deleting data, or changing the production database. That includes running a migration against production and exporting or restoring a backup.
+- Keys, secrets, and permissions. Do not create a Render or Supabase project, and do not paste a database URL, service-role key, or API key into the environment.
+- Anything that costs money. That includes a paid Render or Supabase plan, a paid preview add-on, and raising or setting the OpenRouter spending cap.
+- Merging to `main`. That merge is the production deploy.

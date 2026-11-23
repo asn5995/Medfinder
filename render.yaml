@@ -1,0 +1,34 @@
+# Render blueprint. Secret values stay in the Render dashboard, not in this file.
+# Preview environments use the same service. Point a preview at the development database only.
+# If Render asks for a paid preview add-on, stop and ask before turning it on.
+
+services:
+  - type: web
+    name: medfinder
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: node scripts/migrate.js
+    startCommand: node server.js
+    healthCheckPath: /prototype/
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: MEDFINDER_DATABASE
+        value: production
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: perplexity/sonar
+      - key: OPENROUTER_EXTRACT_MODEL
+        value: google/gemini-2.5-flash
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+previews:
+  generation: automatic
+  expireAfterDays: 3

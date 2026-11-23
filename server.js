@@ -5,6 +5,8 @@ var http = require("http");
 var fs = require("fs");
 var path = require("path");
 var extractorLib = require("./lib/extractor.js");
+var limits = require("./lib/limits.js");
+var records = require("./lib/records.js");
 
 var PORT = Number(process.env.PORT) || 8787;
 var ROOT = __dirname;
@@ -282,13 +284,38 @@ function safeFile(urlPath) {
   return file;
 }
 
+function listenHost(env) {
+  var source = env || process.env;
+  if (source.HOST) return source.HOST;
+  if (source.RENDER === "true") return "0.0.0.0";
+  return "127.0.0.1";
+}
+
 function createServer(options) {
   var opts = options || {};
   var extractor = opts.extractor || extractorLib.createPrescriptionExtractor(extractorLib.createOpenRouterClient());
   var extractLimit = opts.extractLimit || 12000000;
+  var ask = opts.ask || askModel;
+  var allow = limits.createLimiter(
+    opts.rateLimit == null ? 20 : opts.rateLimit,
+    opts.rateWindowMs == null ? 600000 : opts.rateWindowMs
+  );
+  var keyFor = opts.clientKey || limits.clientKey;
+  var store = opts.store || records.storeFromEnv(process.env, typeof fetch === "function" ? fetch : null);
+  function tooMany(request, response) {
+    if (allow(keyFor(request))) return false;
+    sendJson(response, 429, {
+      ok: false,
+      status: "rate_limited",
+      reason: "rate_limited",
+      message: "Too many requests. Wait and try again."
+    });
+    return true;
+  }
   return http.createServer(function (request, response) {
   var url = new URL(request.url, "http://127.0.0.1:" + PORT);
   if (request.method === "POST" && url.pathname === "/extract") {
+    if (tooMany(request, response)) return;
     readBody(request, extractLimit).then(function (body) {
       return extractor.extract(body).then(function (result) {
         sendJson(response, 200, result);
@@ -308,12 +335,13 @@ function createServer(options) {
   }
 
   if (request.method === "POST" && url.pathname === "/listings") {
+    if (tooMany(request, response)) return;
     readBody(request).then(function (body) {
       if (isBlocked(body.name)) {
         sendJson(response, 200, { ok: false, reason: "blocked", suppliers: [], model: MODEL, costUsd: null });
         return null;
       }
-      return askModel({
+      return ask({
         name: body.name,
         strength: body.strength,
         form: body.form,
@@ -325,6 +353,27 @@ function createServer(options) {
       });
     }).catch(function () {
       sendJson(response, 400, { ok: false, reason: "bad_request", suppliers: [], model: MODEL, costUsd: null });
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/records") {
+    if (tooMany(request, response)) return;
+    readBody(request).then(function (body) {
+      var normalized = records.normalizeRecord(body && body.kind, body && body.record);
+      if (!normalized.ok) {
+        sendJson(response, 400, { ok: false, reason: normalized.reason, stored: false });
+        return null;
+      }
+      return store.save(body.kind, normalized.record).then(function (result) {
+        sendJson(response, 200, {
+          ok: !!result.ok,
+          reason: result.reason || "",
+          stored: !!result.stored
+        });
+      });
+    }).catch(function () {
+      sendJson(response, 400, { ok: false, reason: "bad_request", stored: false });
     });
     return;
   }
@@ -361,9 +410,10 @@ function createServer(options) {
 }
 
 if (require.main === module) {
-  createServer().listen(PORT, "127.0.0.1", function () {
-    console.log("MedFinder is at http://127.0.0.1:" + PORT + "/prototype/");
+  var host = listenHost(process.env);
+  createServer().listen(PORT, host, function () {
+    console.log("MedFinder is at http://" + host + ":" + PORT + "/prototype/");
   });
 }
 
-module.exports = { createServer: createServer };
+module.exports = { createServer: createServer, listenHost: listenHost };

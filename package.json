@@ -1,0 +1,12 @@
+{
+  "name": "medfinder",
+  "private": true,
+  "description": "MedFinder local server and tests. No third-party packages.",
+  "scripts": {
+    "test": "node --test",
+    "audit": "npm audit --audit-level=high"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

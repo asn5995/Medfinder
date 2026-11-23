@@ -897,9 +897,16 @@
             rxcui: identity && identity.rxcui ? identity.rxcui : ""
           })
         }).then(function (response) {
-          if (!response.ok) throw new Error("supplier server");
-          return response.json();
+          return response.json().then(function (live) {
+            if (response.status === 429) {
+              renderResult(result, identity, (live && live.message) || "Too many requests. Wait and try again.");
+              return null;
+            }
+            if (!response.ok) throw new Error("supplier server");
+            return live;
+          });
         }).then(function (live) {
+          if (!live) return;
           var filtered = window.MedFinder.filterSuppliers(input, live.suppliers || [], identity && identity.name);
           if (filtered.status === "exact") {
             renderSuppliers(filtered, identity, live, window.MedFinder.usSupply(input, live.us));

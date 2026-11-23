@@ -9,7 +9,7 @@
 
 ## What exists today
 
-The app is static HTML and JavaScript, plus one Node server. There is no database, no account system, and no compile step.
+The app is static HTML and JavaScript, plus one Node server. There is no account system and no compile step. Confirmed prescriptions and orders stay in the browser. `migrations/` is ready for a separate development database and production database, and nothing is written there until a development URL is set.
 
 A typed drug is identified with RxNorm. `prototype/match.js` then accepts or rejects a row only when the ingredient, salt, strength, form, and release agree. `prototype/catalog.js` is the sample table used when the server has no key or no live page comes back. `server.js` asks OpenRouter for public India pharmacy listings and a US price. The key stays in `.env`.
 

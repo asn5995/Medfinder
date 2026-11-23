@@ -182,17 +182,17 @@
     <!-- LIVING PRD (Updated every week!) -->
     <section id="prd">
       <h2>Living PRD (Product Requirements Document)</h2>
-      <p class="meta">PRD v2 · November 15, 2026. A specific participant and testing session are still pending.</p>
+      <p class="meta">PRD v3 · November 22, 2026. A specific participant and testing session are still pending. Render and Supabase are chosen and not connected yet.</p>
 
       <h3>1. Target User & The Job to Be Done</h3>
       <p><strong>Who is this for?</strong> A classmate or friend on a long-term prescription (for example cholesterol, thyroid, or blood pressure medicine) who pays a high price at a US pharmacy and wants to know whether the same medicine is sold for less in India. A specific participant and testing session are pending.</p>
       <p><strong>The painful "Before" workflow:</strong> They leave the pharmacy with a brand name, pay the US price, or ask someone in India to buy it. They search the brand, find a different name, and cannot tell whether the ingredient, salt form, strength, and release type are the same. They message a chemist or try a website without knowing whether the seller is legitimate.</p>
-      <p><strong>The "After" workflow with this product:</strong> They type the drug or pick an example. RxNorm identifies the name. With the local server running, they see a list of India e-commerce suppliers, each with a pack price, a shipping figure, a 90-day cost, and a source link. The same 90 units at the same strength also show a US price and the savings. A match counts only when the ingredient, salt form, strength, dosage form, and release type all agree. If the server is not running, the sample catalog is shown. Photo upload is not built yet. Ordering stays outside the app.</p>
+      <p><strong>The "After" workflow with this product:</strong> They type the drug or upload a prescription photo or PDF. RxNorm identifies a typed name. The reader fills medicine, strength, frequency, and quantity, and the patient confirms those fields before they are saved. With the server running, they see India e-commerce suppliers, each with a pack price, a shipping figure, a 90-day cost, and a source link, plus a US price for the same 90 units and the savings. A match counts only when the ingredient, salt form, strength, dosage form, and release type all agree. A saved medicine can be placed with a ranked seller. The next refill and a reminder show on the calendar. The app does not take payment or ship medicine. If the server is not running, the sample catalog is shown and the browser keeps the saved record.</p>
 
       <h3>2. Scope & Explicit Non-Goals</h3>
       <ul>
         <li><strong>In Scope (Core Workflow):</strong> Prescription in → verified Indian equivalent + landed cost. Upload or type the drug, confirm the extracted fields, then see a match and what a supply would cost including shipping.</li>
-        <li><strong>Out of Scope #1:</strong> In-app ordering and payments. The app links out to the seller.</li>
+        <li><strong>Out of Scope #1:</strong> Payment and shipping. A saved order is a refill planning record, not a purchase.</li>
         <li><strong>Out of Scope #2:</strong> Controlled substances, injectables, biologics, and refrigerated drugs. Those are blocked, not priced.</li>
         <li><strong>Out of Scope #3:</strong> Any country other than India, and any medical advice. The app does not tell someone to switch drugs or change a dose.</li>
       </ul>
@@ -200,7 +200,7 @@
       <h3>3. How It Works Under the Hood & Riskiest Assumption (Week 2+)</h3>
       <p><strong>Riskiest Assumption:</strong> A real drug lookup can name the ingredient without the salt or the release type. The rules still have to reject metoprolol succinate versus tartrate, and 40 mg versus 20 mg. No outside user has tried it.</p>
       <p><strong>How this build tests it:</strong> Find equivalent calls RxNorm, shows the returned name and RxCUI, then runs the same rules. Lipitor 20 mg still matches. Lipitor 40 mg and metoprolol succinate still show no price. If RxNorm does not answer, the page says the lookup failed and does not invent an ID.</p>
-      <p><strong>Simple Architecture:</strong> Typed drug → RxNorm API → local server, which asks a model to read public India e-commerce pages → match.js accepts or rejects each supplier → a list with pack price, shipping, landed cost, and the source link, or the failed rule. RxNorm only identifies the name. The model does not decide the match. The sample catalog is the fallback when no supplier page comes back. The OpenRouter key stays in `.env`.</p>
+      <p><strong>Simple Architecture:</strong> Typed drug or a confirmed prescription → RxNorm for a typed name → the Node server. The server asks a model to read public India pages, or to read a prescription file into fields the patient confirms. match.js accepts or rejects each supplier. A saved medicine can be ordered from a ranked seller, and the refill date is calculated in the browser. The model does not decide the match. The sample catalog is the fallback when no supplier page comes back. The OpenRouter key stays in the server environment.</p>
 
       <h3>4. Unit Economics & Analytics Snapshot (Updated Weekly)</h3>
       <div class="grid-2">
@@ -221,6 +221,11 @@
           <div class="stat-value">TBD</div>
         </div>
       </div>
+
+      <h3>5. Hosting, database, and security (Week 3)</h3>
+      <p><strong>Hosting:</strong> GitHub Pages publishes this page and the prototype from <code>docs/</code> on <code>main</code>. That host cannot run the Node server, so the public prototype cannot call the model. <code>render.yaml</code> is the production service and the pull-request preview. A bad deploy rolls back from the Render deploy list, or by reverting the commit on <code>main</code>. The Render account is not connected yet.</p>
+      <p><strong>Database:</strong> Development and production are separate. <code>migrations/001_clinic.sql</code> stores the confirmed medicine text, the order, and one rating. Photos are not stored. The browser copy still works when no database is configured. Production migrations do not run on deploy. No Supabase project has been created, and the free plan will need a manual export before the first production change.</p>
+      <p><strong>Security:</strong> There is no sign-in. The paid routes and the database write allow 20 requests from one visitor in 10 minutes, then return 429. The public database role has row security and no grants. The service-role key stays on the server. The OpenRouter monthly cap is not set yet. PostHog pageviews, clicks, and session replay stay on. The <code>phc_</code> key is public. Details are in <code>SECURITY.md</code>.</p>
     </section>
 
     <!-- WEEKLY BUILD LOG (Updated at least twice a week via Git commits) -->
@@ -313,11 +318,11 @@
       </div>
 
       <div class="log-entry">
-        <h3>Build 3 · Build.exe: The Core Workflow (Due Nov 23)</h3>
+        <h3>Build 3 · November 18 and November 22, 2026 (Due Nov 23)</h3>
         <ul>
-          <li><strong>What shipped:</strong> [End-to-end workflow working with real inputs + PostHog funnel events]</li>
-          <li><strong>What broke / changed in PRD:</strong> [Fill in]</li>
-          <li><strong>Cost & time this week:</strong> $[0.00] · [0] hours</li>
+          <li><strong>What shipped:</strong> On November 18 the prototype gained prescription reading, refill reminders, seller ranking, and the dark page. On November 22 the repo gained GitHub Actions tests, a Render blueprint with preview deploys and a rollback path, SQL migrations for a separate development database and production database, and a per-visitor limit of 20 paid or saved requests before HTTP 429. PostHog pageviews, clicks, and session replay are still on the live GitHub Pages site. The events already include find, result, saved prescription, placed order, and rated seller.</li>
+          <li><strong>What broke / changed in PRD:</strong> PRD v3 replaces the line that said photo upload was not built. That line stayed up after the upload feature shipped. The server also listened only on localhost, which would have made Render unreachable. GitHub Pages still cannot run the model. Render and Supabase are not connected, so the 429 limit and the database are not on the public site yet.</li>
+          <li><strong>Cost & time this week:</strong> $0.00 for hosting and for OpenRouter on this change. The earlier keyed lookup remains about $0.04. The OpenRouter monthly cap is not set. Hours are blank until they are filled in.</li>
         </ul>
       </div>
 

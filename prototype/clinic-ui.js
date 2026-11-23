@@ -36,6 +36,19 @@
     }
   }
 
+  function mirror(kind, record) {
+    if (!record || typeof fetch !== "function") return;
+    var copy = JSON.parse(JSON.stringify(record));
+    delete copy.dataBase64;
+    delete copy.file;
+    delete copy.bytes;
+    fetch("/records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: kind, record: copy })
+    }).catch(function () {});
+  }
+
   function todayIso() {
     var now = new Date();
     var month = now.getMonth() + 1;
@@ -337,6 +350,7 @@
     if (!result.ok) return;
     state = result.state;
     persist();
+    mirror("order", result.order);
     track("placed_order", { seller_id: result.order.sellerId, assigned: assign });
     renderAll();
     setMessage("order-message", result.message + " Refill " + result.order.refillDueOn + ". Reminder " + result.order.reminderOn + ".");
@@ -408,6 +422,7 @@
     if (!result.ok) return;
     state = result.state;
     persist();
+    mirror("prescription", result.prescription);
     track("saved_prescription", { count: result.prescription.medications.length });
     renderAll();
   });
@@ -430,6 +445,7 @@
       }
       state = fulfilled.state;
       persist();
+      mirror("order", fulfilled.order);
       renderAll();
       setMessage("order-message", "Order marked fulfilled. You can rate that seller once.");
       return;
@@ -447,6 +463,7 @@
     if (!rated.ok) return;
     state = rated.state;
     persist();
+    mirror("rating", rated.order);
     track("rated_seller", { stars: rated.order.rating.stars });
     renderAll();
   });
