@@ -8,6 +8,7 @@ var serverLib = require("../server.js");
 var records = require("../lib/records.js");
 var limits = require("../lib/limits.js");
 var migrate = require("../scripts/migrate.js");
+var access = require("../scripts/check-access.js");
 
 function listen(server) {
   return new Promise(function (resolve) {
@@ -238,6 +239,23 @@ test("migrations do nothing without a database and refuse production", function 
   });
   assert.equal(production.status, 0);
   assert.match(production.stdout, /Refusing to change the production database/);
+});
+
+test("the public-key check rejects a production database and a successful anon write", function () {
+  assert.equal(access.rejected({ status: 401 }), true);
+  assert.equal(access.rejected({ status: 201 }), false);
+  var root = path.join(__dirname, "..");
+  var production = child.spawnSync(process.execPath, ["scripts/check-access.js"], {
+    cwd: root,
+    encoding: "utf8",
+    env: Object.assign({}, process.env, {
+      MEDFINDER_DATABASE: "production",
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_ANON_KEY: "anon-test"
+    })
+  });
+  assert.equal(production.status, 1);
+  assert.match(production.stderr, /Refusing to run the access check against production/);
 });
 
 test("a visitor key uses the first forwarded address", function () {
