@@ -157,7 +157,8 @@
       if (value === "ER") return extract.EXTENDED_WORDS.test(words);
       return extract.IMMEDIATE_WORDS.test(words) || /\b(normal|standard|not extended|no er|no xl)\b/.test(words);
     }
-    if (field === "supplyDays") return hasNumber(source, String(value));
+    // "30 a month" is a quantity, not a supply length. Only "30 days" or "30-day" counts.
+    if (field === "supplyDays") return new RegExp("(^|[^\\d.])" + value + " ?days?\\b").test(source);
     if (field === "quantity") {
       var digits = String(value).match(/\d+/g) || [];
       return digits.length > 0 && digits.every(function (digit) { return hasNumber(source, digit); });
@@ -202,6 +203,11 @@
       accepted[field] = value;
       if (field === "release") delete next.suggested.release;
     });
+    // A name such as "Toprol XL" already says extended-release, the same rule the file reader uses.
+    if (!next.release && next.name && extract.normalizeRelease(next.name) === "ER") {
+      next.release = "ER";
+      accepted.release = "ER";
+    }
     return { draft: next, accepted: accepted, rejected: rejected };
   }
 

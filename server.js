@@ -302,7 +302,8 @@ function createServer(options) {
     opts.rateWindowMs == null ? 600000 : opts.rateWindowMs
   );
   var assistant = opts.chat || chatLib.createChatAssistant(extractorLib.createOpenRouterClient({
-    model: process.env.OPENROUTER_CHAT_MODEL || "google/gemini-2.5-flash"
+    model: process.env.OPENROUTER_CHAT_MODEL || "google/gemini-2.5-flash",
+    json: true
   }));
   // One conversation takes several turns, so chat has its own, larger per-visitor limit.
   var allowChat = limits.createLimiter(

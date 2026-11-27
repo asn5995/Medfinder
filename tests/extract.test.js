@@ -151,6 +151,18 @@ test("a missing key or a model failure is a message, not a crash", async functio
   assert.equal(thrown.medications.length, 0);
 });
 
+test("the chat client asks OpenRouter for JSON mode, and the reader does not", async function () {
+  var bodies = [];
+  function fakeFetch(url, init) {
+    bodies.push(JSON.parse(init.body));
+    return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ choices: [{ message: { content: "{}" } }] }); } });
+  }
+  await extractorLib.createOpenRouterClient({ env: { OPENROUTER_API_KEY: "test" }, fetch: fakeFetch, json: true }).complete([]);
+  await extractorLib.createOpenRouterClient({ env: { OPENROUTER_API_KEY: "test" }, fetch: fakeFetch }).complete([]);
+  assert.deepEqual(bodies[0].response_format, { type: "json_object" });
+  assert.equal(bodies[1].response_format, undefined);
+});
+
 test("the OpenRouter client does not call the network without a key", async function () {
   var called = false;
   var client = extractorLib.createOpenRouterClient({

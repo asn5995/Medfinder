@@ -60,6 +60,11 @@ test("a detail is accepted only when it is in the patient's words", function () 
   assert.equal(guessed.draft.strength, "");
   assert.deepEqual(guessed.rejected.map(function (item) { return item.field; }), ["name", "strength"]);
 
+  var month = chat.applyUpdates(draft, { quantity: "30", supplyDays: 30 }, "30 a month");
+  assert.equal(month.draft.quantity, "30");
+  assert.equal(month.draft.supplyDays, null, "30 a month is not a 30-day supply");
+  assert.equal(chat.applyUpdates(draft, { supplyDays: 90 }, "it's a 90-day fill").draft.supplyDays, 90);
+
   var badForm = chat.applyUpdates(draft, { form: "liquid", release: "maybe" }, "it's a liquid");
   assert.deepEqual(badForm.rejected, [{ field: "form", reason: "format" }, { field: "release", reason: "format" }]);
 });
@@ -70,6 +75,14 @@ test("a later value replaces an earlier one", function () {
   assert.equal(fixed.draft.strength, "40 mg");
   var unitKept = chat.applyUpdates(fixed.draft, { strength: "10 mg" }, "actually make it 10");
   assert.equal(unitKept.draft.strength, "10 mg");
+});
+
+test("a name that says XL or ER sets extended-release by itself", function () {
+  var applied = chat.applyUpdates(chat.emptyDraft(), { name: "Toprol XL", strength: "50 mg" }, "Toprol XL 50mg");
+  assert.equal(applied.draft.release, "ER");
+  assert.equal(chat.nextMissing(applied.draft), "form");
+  var plain = chat.applyUpdates(chat.emptyDraft(), { name: "Lipitor" }, "Lipitor");
+  assert.equal(plain.draft.release, "");
 });
 
 test("a value already in the draft is not rejected again", function () {
@@ -150,6 +163,8 @@ test("normal conversation: one detail at a time", async function () {
   assert.equal(first.reply, "Got it, Lipitor. What strength is it?");
   assert.equal(model.calls[0][0].role, "system");
   assert.match(model.calls[0][0].content, /Never give medical advice/);
+  assert.equal(model.calls[0].length, 2, "the conversation is sent as one transcript, not as turns to imitate");
+  assert.match(model.calls[0][1].content, /Patient: I take Lipitor/);
 
   var second = await assistant.turn({ messages: [user("I take Lipitor"), bot(first.reply), user("20mg")], draft: first.draft, asked: "strength" });
   assert.equal(second.draft.strength, "20 mg");
@@ -188,6 +203,21 @@ test("a correction replaces the earlier answer", async function () {
   assert.equal(result.draft.strength, "40 mg");
   assert.equal(result.draft.name, "Lipitor");
   assert.equal(result.next, "release");
+});
+
+test("a reply that asks about something already answered is replaced", async function () {
+  var model = fakeModel([
+    { reply: "Updated to 25 mg. Is it extended-release?", intent: "correction", updates: { strength: "25 mg" } }
+  ]);
+  var result = await chatLib.createChatAssistant(model).turn({
+    messages: [user("Toprol XL 50 mg tablets"), user("sorry, it's actually the 25 mg one")],
+    draft: chat.normalizeDraft({ name: "Toprol XL", strength: "50 mg", form: "tablet", release: "ER" }),
+    asked: ""
+  });
+  assert.equal(result.draft.strength, "25 mg");
+  assert.equal(result.next, "");
+  assert.equal(result.replyIssue, "asks_answered");
+  assert.match(result.reply, /summary/);
 });
 
 test("missing information is asked for, not guessed", async function () {

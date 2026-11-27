@@ -4,18 +4,20 @@
 
 - **Builder:** Anirudh (`asn5995`)
 - **Course:** NYU Stern, Building with AI, Fall 2026
-- **Product page:** [asn5995.github.io/Medfinder](https://asn5995.github.io/Medfinder/)
-- **Prototype:** runs locally with `node server.js`. GitHub Pages publishes `docs/` and has no API key.
+- **Product page:** [building-with-ai-f26.github.io/as20593-medfinder](https://building-with-ai-f26.github.io/as20593-medfinder/)
+- **App:** runs locally with `node server.js`. GitHub Pages publishes `docs/` and has no API key, so its chat offers the sample medicines only.
 
 ## What exists today
 
-The app is static HTML and JavaScript, plus one Node server. There is no account system and no compile step. Confirmed prescriptions and orders stay in the browser. `migrations/` is ready for a separate development database and production database, and nothing is written there until a development URL is set.
+The app is one chat screen: a short header, a warning line that stays visible, the conversation, and a message box with an attach button. The assistant asks one question at a time, in plain English. A summary is confirmed before any search or save. Results are compact cards with details hidden until tapped. Saved medicines, refill reminders, and seller ratings are in the **My meds** panel. The **About** panel links to the product page, the PRD, and the build log, and keeps **Check rules**.
+
+It is static HTML and JavaScript, plus one Node server. There is no account system and no compile step. Confirmed prescriptions and orders stay in the browser. `migrations/` is ready for a separate development database and production database, and nothing is written there until a development URL is set.
 
 A typed drug is identified with RxNorm. `prototype/match.js` then accepts or rejects a row only when the ingredient, salt, strength, form, and release agree. `prototype/catalog.js` is the sample table used when the server has no key or no live page comes back. `server.js` asks OpenRouter for public India pharmacy listings and a US price. The key stays in `.env`.
 
-Patients, orders, and sellers were not stored before this change. The page did not read a prescription photo, schedule a refill, or rank a seller. Those three pieces are now local records in the browser, with the decisions in plain JavaScript files the tests can run without a network call.
+Saved prescriptions, orders, and seller ratings are local records in the browser, with the decisions in plain JavaScript files the tests can run without a network call.
 
-GitHub Pages deploys from the `docs/` folder on `main`. The prototype files are copied to `docs/prototype/`. PostHog records pageviews and clicks. The published prototype cannot read a prescription or list live suppliers, because it has no key.
+GitHub Pages deploys from the `docs/` folder on `main`. The prototype files are copied to `docs/prototype/`. PostHog records pageviews and clicks. The published copy cannot chat, read a prescription, or list live suppliers, because it has no server and no key. It says so and offers the sample medicines, which use the sample catalog and the same match rules.
 
 ## Local setup
 
@@ -65,17 +67,19 @@ node --test
 
 That runs every file in `tests/`. It includes the 15 match-rule cases, prescription parsing with the model replaced by a fake `complete` function, the chat intake checks in `tests/chat.test.js`, refill and reminder dates, and seller ranking. Nothing in that command calls RxNorm or OpenRouter.
 
-On the prototype page, **Check rules** runs the same match cases in the browser.
+In the app's **About** panel, **Check rules** runs the same match cases in the browser. `?checks=1` opens it and runs them.
 
 There is no separate build. `node --check` is enough to confirm a JavaScript file parses, and `node --test` is the suite to run before review.
 
 ## Try the features
 
-1. **Prescription upload.** Choose a JPG, PNG, WEBP, GIF, or PDF and click **Read prescription**. Edit the medicine, strength, frequency, and quantity, then **Save prescription**. A blurry file, a file that is not a prescription, a missing key, or a stopped server leaves a message and an empty form instead of saving a guessed drug. **Enter by hand** does the same confirm step without a model call. Without a key, the reader says `OPENROUTER_API_KEY` is missing.
-2. **Refill calendar.** Save a medicine, set the supply length and the reminder lead, and place an order. The refill date is the order date plus the supply length. The reminder date is that refill date minus the lead time. **Load sample orders** shows an atorvastatin refill already inside the reminder window and a fulfilled metformin order. Open **Reminders** for the in-app notice, and move the calendar to the refill month.
-3. **Seller rating.** **Mark fulfilled** on an order, then save one rating of 1 to 5 stars and an optional comment. A second rating on that order is refused. Sellers are listed by ranking score. **Let ranking assign this order** draws a seller with probability proportional to that score, so a higher rank receives more of those orders.
+1. **Chat.** Type "Lipitor", then "20 mg", then tap **Tablet**. RxNorm lists only the regular version, so the summary suggests it. Tap **Search**. Or type it all at once: "Toprol XL 50mg tablets once a day". Correct anything in your own words, such as "actually it's 25 mg". **Change something** and **Start over** are on every summary.
+2. **Prescription upload.** Tap the paperclip and choose a JPG, PNG, WEBP, GIF, or PDF. The bot shows what it read and asks only about what is missing. A prescription with several medicines is handled one at a time. A blurry file, a file that is not a prescription, a missing key, or a stopped server gives a message, not a guessed drug.
+3. **Refill reminder.** After a search, tap **Save & set a refill reminder**. Pick the supply length (60 days by default) and a seller, or let the ranking pick. The summary shows the refill date and a reminder 20 days before it. Say "remind me 10 days before" to change that, then tap **Save**. The reminder shows at the top of the chat and in **My meds** once it is due.
+4. **Seller rating.** In **My meds**, tap **Mark fulfilled** on an order, then tap 1 to 5 stars. A second rating on that order is refused. **Let the ranking pick** draws a seller with probability proportional to its ranking score.
+5. **Things the bot refuses.** Ask "Can I take it with grapefruit juice?" and it gives a fixed refusal. Say "my cholesterol pill" and it asks for the name instead of guessing.
 
-Sample orders replace the prescriptions and orders saved in this browser. **Clear this browser's saved data** removes them. The demo seller history stays.
+**Load sample orders** in **My meds** replaces what this browser has saved. **Clear this browser's saved data** removes it. The demo seller history stays.
 
 ## Seller ranking
 
@@ -123,7 +127,8 @@ Email and push are not set up. There is no mail provider, no patient inbox, and 
 | File / folder | Purpose |
 | --- | --- |
 | [`docs/index.html`](./docs/index.html) | Public pitch, living PRD, and weekly build log. |
-| [`prototype/`](./prototype/) | Local app. Copied to `docs/prototype/` for GitHub Pages. |
+| [`prototype/`](./prototype/) | Local app. Copied to `docs/prototype/` for GitHub Pages. `chat-ui.js` draws the chat, `chat.js` holds the intake rules, `lookup.js` runs RxNorm and the supplier search. |
+| [`lib/chat.js`](./lib/chat.js) | Server side of the chat: the prompt, the model call, and the checks on its output. |
 | [`server.js`](./server.js) | Local server for supplier search and prescription reading. |
 | [`tests/`](./tests/) | `node --test`, plus the Build 4 note. |
 | [`AGENTS.md`](./AGENTS.md) | Commands and agent rules. |
