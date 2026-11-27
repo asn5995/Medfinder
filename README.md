@@ -37,6 +37,21 @@ Set `OPENROUTER_API_KEY` in `.env` before using live supplier search or prescrip
 | `OPENROUTER_API_KEY` | OpenRouter key for supplier search and prescription reading. Never commit it. |
 | `OPENROUTER_MODEL` | Supplier search model. Default `perplexity/sonar`. |
 | `OPENROUTER_EXTRACT_MODEL` | Prescription photo and PDF model. Default `google/gemini-2.5-flash`. It needs to accept images and PDFs. |
+| `OPENROUTER_CHAT_MODEL` | Chat intake model for `POST /chat`. Default `google/gemini-2.5-flash`. |
+
+## Chat intake (`POST /chat`)
+
+The server route behind the chat screen. The page sends the conversation, the details so far, and the last question asked. The model pulls details out of the patient's words and writes one short reply. Before the page uses anything, `lib/chat.js` checks it:
+
+- Only `name`, `strength`, `form`, `release`, `frequency`, `quantity`, and `supplyDays` are kept, in the same formats `match.js` reads. Other keys are dropped.
+- A detail is kept only when it appears in the patient's own messages. "My cholesterol pill" never becomes atorvastatin. Assistant messages cannot supply a detail.
+- A reply that mentions a price, seller, pharmacy, link, a match, advice, or a strength the app does not have is replaced with a fixed question.
+- A medical advice question gets a fixed refusal. Common phrasings are caught by code before the model is called.
+- Short answers to the question just asked, such as "20 mg", "tablet", or "no", are read by code with no model call.
+
+`prototype/chat.js` holds those rules and the question order: name, strength, form, release. Frequency, quantity, and supply length are kept when mentioned but never asked for before a search. When release is missing, the page can call `suggestRelease` with the RxNorm names. If RxNorm lists only one version at that strength and form, the summary shows it as a suggestion for the patient to confirm. Otherwise the patient is asked.
+
+`/chat` allows 60 requests per visitor in 10 minutes, separate from the shared limit of 20 on `/extract`, `/listings`, and `/records`.
 
 `.env.example` lists the names only. The server reads `.env` at startup and does not send the key to the browser. The page does not store the uploaded file. The server forwards it to OpenRouter for that one request.
 
@@ -48,7 +63,7 @@ Refill length and reminder lead time are not environment variables. They default
 node --test
 ```
 
-That runs every file in `tests/`. It includes the 15 match-rule cases, prescription parsing with the model replaced by a fake `complete` function, refill and reminder dates, and seller ranking. Nothing in that command calls RxNorm or OpenRouter.
+That runs every file in `tests/`. It includes the 15 match-rule cases, prescription parsing with the model replaced by a fake `complete` function, the chat intake checks in `tests/chat.test.js`, refill and reminder dates, and seller ranking. Nothing in that command calls RxNorm or OpenRouter.
 
 On the prototype page, **Check rules** runs the same match cases in the browser.
 

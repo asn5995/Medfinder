@@ -5,6 +5,7 @@ var http = require("http");
 var fs = require("fs");
 var path = require("path");
 var extractorLib = require("./lib/extractor.js");
+var chatLib = require("./lib/chat.js");
 var limits = require("./lib/limits.js");
 var records = require("./lib/records.js");
 
@@ -300,10 +301,18 @@ function createServer(options) {
     opts.rateLimit == null ? 20 : opts.rateLimit,
     opts.rateWindowMs == null ? 600000 : opts.rateWindowMs
   );
+  var assistant = opts.chat || chatLib.createChatAssistant(extractorLib.createOpenRouterClient({
+    model: process.env.OPENROUTER_CHAT_MODEL || "google/gemini-2.5-flash"
+  }));
+  // One conversation takes several turns, so chat has its own, larger per-visitor limit.
+  var allowChat = limits.createLimiter(
+    opts.chatRateLimit == null ? 60 : opts.chatRateLimit,
+    opts.rateWindowMs == null ? 600000 : opts.rateWindowMs
+  );
   var keyFor = opts.clientKey || limits.clientKey;
   var store = opts.store || records.storeFromEnv(process.env, typeof fetch === "function" ? fetch : null);
-  function tooMany(request, response) {
-    if (allow(keyFor(request))) return false;
+  function tooMany(request, response, limiter) {
+    if ((limiter || allow)(keyFor(request))) return false;
     sendJson(response, 429, {
       ok: false,
       status: "rate_limited",
@@ -330,6 +339,18 @@ function createServer(options) {
           ? "That file is too large. Upload a photo or PDF under 8 MB."
           : "The upload could not be read. Try a JPG, PNG, WEBP, GIF, or PDF."
       });
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/chat") {
+    if (tooMany(request, response, allowChat)) return;
+    readBody(request).then(function (body) {
+      return assistant.turn(body).then(function (result) {
+        sendJson(response, result && result.status === "bad_request" ? 400 : 200, result);
+      });
+    }).catch(function () {
+      sendJson(response, 400, { ok: false, status: "bad_request", reason: "bad_request", message: "The message could not be read." });
     });
     return;
   }

@@ -63,6 +63,8 @@
     return {
       name: name,
       strength: clean(row.strength, 80),
+      form: clean(row.form, 40),
+      release: clean(row.release, 40),
       frequency: clean(row.frequency, 80),
       quantity: clean(row.quantity, 80),
       supplyDays: wholeDays(row.supplyDays) || refill.DEFAULT_SUPPLY_DAYS

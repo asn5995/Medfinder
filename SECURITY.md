@@ -41,6 +41,14 @@ Checked on November 22, 2026, from this branch, before any Render or Supabase ac
 - The production migrate command refuses to change the production database.
 - The server listens on `0.0.0.0` only when Render starts it. Local development stays on `127.0.0.1`.
 
+## Chat intake (added November 27, 2026)
+
+- `POST /chat` calls the model from the server only, with the same `OPENROUTER_API_KEY`. The key never reaches the page.
+- The route has its own limit: 60 requests per visitor in 10 minutes. It does not use up the shared limit of 20.
+- The model's JSON is checked in `lib/chat.js` before the page uses it. Unknown keys are dropped. A detail must appear in the patient's own messages, and assistant or system messages cannot supply one. The page cannot send a system message. History is trimmed to the last 12 messages of 600 characters each.
+- A reply that mentions a price, a seller, a link, a match, advice, or a strength the app does not have is replaced with a fixed question. Medical advice questions get a fixed refusal, and common phrasings never reach the model.
+- Checked with `node --test` (fake model) and a live run on November 27: a bad model id and a missing key both returned a message, not a crash.
+
 ## Still open
 
 - The public-key insert and delete has not been tried on a real database. Do that after the development project exists, and only against development.

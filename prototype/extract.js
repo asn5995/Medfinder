@@ -28,6 +28,38 @@
     return number;
   }
 
+  // Form and release are kept only when the words are printed. A blank means "ask the patient".
+  var FORM_WORDS = {
+    tablet: /\b(tab|tabs|tablet|tablets)\b/,
+    capsule: /\b(cap|caps|capsule|capsules)\b/,
+    injection: /\b(inj|injection|injections|injectable|pen|vial|syringe)\b/
+  };
+  var DELAYED_WORDS = /\b(dr|ec|delayed|enteric)\b/;
+  var EXTENDED_WORDS = /\b(er|xl|xr|sr|cr|extended|sustained|controlled|24 ?hr|12 ?hr)\b/;
+  var IMMEDIATE_WORDS = /\b(ir|immediate|regular)\b/;
+
+  function wordText(value) {
+    return String(value == null ? "" : value).toLowerCase().replace(/-/g, " ");
+  }
+
+  function formsIn(value) {
+    var text = wordText(value);
+    return Object.keys(FORM_WORDS).filter(function (form) { return FORM_WORDS[form].test(text); });
+  }
+
+  function normalizeForm(value) {
+    var found = formsIn(value);
+    return found.length === 1 ? found[0] : "";
+  }
+
+  function normalizeRelease(value) {
+    var text = wordText(value);
+    if (DELAYED_WORDS.test(text)) return "";
+    if (EXTENDED_WORDS.test(text)) return "ER";
+    if (IMMEDIATE_WORDS.test(text)) return "IR";
+    return "";
+  }
+
   function normalizeMedication(row) {
     if (!row || typeof row !== "object") return null;
     var name = cleanText(row.name || row.medication || row.drug, NAME_LIMIT);
@@ -35,6 +67,8 @@
     return {
       name: name,
       strength: strengthText(row.strength || row.dosage || row.dose),
+      form: normalizeForm(row.form),
+      release: normalizeRelease(row.release) || normalizeRelease(name),
       frequency: cleanText(row.frequency || row.sig || row.directions, FIELD_LIMIT),
       quantity: cleanText(row.quantity || row.qty || row.dispense, FIELD_LIMIT),
       supplyDays: supplyDays(row.supplyDays)
@@ -106,5 +140,13 @@
     return result("ok", medications, "Check these fields, then save. Nothing is stored until you confirm.");
   }
 
-  return { parseExtraction: parseExtraction };
+  return {
+    parseExtraction: parseExtraction,
+    normalizeForm: normalizeForm,
+    normalizeRelease: normalizeRelease,
+    formsIn: formsIn,
+    EXTENDED_WORDS: EXTENDED_WORDS,
+    IMMEDIATE_WORDS: IMMEDIATE_WORDS,
+    DELAYED_WORDS: DELAYED_WORDS
+  };
 });

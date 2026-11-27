@@ -78,3 +78,42 @@ test("the extract route returns the mocked reader and rejects a bad upload", asy
     await new Promise(function (resolve) { server.close(resolve); });
   }
 });
+
+test("the chat route uses the mocked assistant, refuses bad bodies, and has its own limit", async function () {
+  var turns = 0;
+  var server = createServer({
+    chatRateLimit: 3,
+    rateLimit: 1,
+    chat: {
+      turn: function (body) {
+        turns += 1;
+        if (!body.messages || !body.messages.length) {
+          return Promise.resolve({ ok: false, status: "bad_request", reason: "bad_request", message: "Send the patient's message." });
+        }
+        return Promise.resolve({ ok: true, status: "ok", reply: "What strength is it?", draft: { name: "Lipitor" }, next: "strength" });
+      }
+    },
+    extractor: { extract: function () { return Promise.resolve({ status: "ok", medications: [] }); } }
+  });
+  var port = await listen(server);
+  try {
+    var ok = await request(port, "POST", "/chat", JSON.stringify({ messages: [{ role: "user", content: "Lipitor" }], draft: {} }));
+    assert.equal(ok.status, 200);
+    assert.equal(ok.body.next, "strength");
+
+    var empty = await request(port, "POST", "/chat", JSON.stringify({ messages: [] }));
+    assert.equal(empty.status, 400);
+
+    var broken = await request(port, "POST", "/chat", "{");
+    assert.equal(broken.status, 400);
+    assert.equal(turns, 2);
+
+    var limited = await request(port, "POST", "/chat", JSON.stringify({ messages: [{ role: "user", content: "x" }] }));
+    assert.equal(limited.status, 429);
+
+    var extract = await request(port, "POST", "/extract", JSON.stringify({ filename: "a.png", dataBase64: "" }));
+    assert.equal(extract.status, 200, "chat turns do not use up the shared limit");
+  } finally {
+    await new Promise(function (resolve) { server.close(resolve); });
+  }
+});
