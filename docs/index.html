@@ -15,7 +15,7 @@
         person_profiles: "identified_only",
         capture_pageview: true,
         capture_pageleave: true,
-        disable_session_recording: false
+        disable_session_recording: true
       });
     }
   </script>
@@ -176,7 +176,7 @@
         <img src="prototype-rxnorm.png" alt="MedFinder prototype. Lipitor 20 mg is identified by RxNorm as RxCUI 617318, then matched to Storvas 20 with a US price of $249.00 and a landed cost of $27.00." style="width: 100%; border: 1px solid var(--border); border-radius: 8px;" />
       </p>
       <p class="meta">
-        The November 15 screenshot uses catalog prices. PostHog records pageviews and clicks on this page and the prototype, and session replay is turned on in the page.
+        The November 15 screenshot uses catalog prices. PostHog records pageviews and clicks on this page and the prototype, but session replay is disabled.
       </p>
     </section>
 
@@ -227,7 +227,7 @@
       <h3>5. Hosting, database, and security (Week 3)</h3>
       <p><strong>Hosting:</strong> GitHub Pages publishes this page and the prototype from <code>docs/</code> on <code>main</code>. That host cannot run the Node server, so the published page calls the Render service at <code>https://as20593-medfinder.onrender.com</code> for chat, prescription reading, and live suppliers. The server answers browser requests only from this GitHub Pages site. Render's free plan sleeps when idle, so the first visit can take about a minute while the page shows "Waking up the MedFinder server". If the server cannot be reached, the page says so and offers the sample medicines. <code>render.yaml</code> is the production service and the pull-request preview. A bad deploy rolls back from the Render deploy list, or by reverting the commit on <code>main</code>. The Render account is not connected yet.</p>
       <p><strong>Database:</strong> Development and production are separate. <code>migrations/001_clinic.sql</code> stores the confirmed medicine text, the order, and one rating. Photos are not stored. The browser copy still works when no database is configured. Production migrations do not run on deploy. No Supabase project has been created, and the free plan will need a manual export before the first production change.</p>
-      <p><strong>Security:</strong> There is no sign-in. The paid routes and the database write allow 20 requests from one visitor in 10 minutes, then return 429. Chat has its own limit of 60 per visitor in 10 minutes, because one conversation takes several turns. The public database role has row security and no grants. The service-role key stays on the server. The OpenRouter monthly cap is not set yet. PostHog pageviews, clicks, and session replay stay on. The <code>phc_</code> key is public. Details are in <code>SECURITY.md</code>.</p>
+      <p><strong>Security:</strong> There is no sign-in. The paid routes and the database write allow 20 requests from one visitor in 10 minutes, then return 429. Chat has its own limit of 60 per visitor in 10 minutes, because one conversation takes several turns. The public database role has row security and no grants. The service-role key stays on the server. The OpenRouter monthly cap is not set yet. PostHog pageviews and clicks stay on. Session replay is disabled. The <code>phc_</code> key is public. Details are in <code>SECURITY.md</code>.</p>
     </section>
 
     <!-- WEEKLY BUILD LOG (Updated at least twice a week via Git commits) -->
@@ -297,7 +297,7 @@
           <li><strong>What shipped:</strong> Find equivalent calls RxNorm, shows the name and RxCUI, then the existing rules show the match or the failed rule. PRD v2 names that risk and the $0 cost per run. Setup notes are in AGENTS.md.</li>
           <li><strong>What was checked:</strong> Lipitor 20 mg returns an RxCUI and still matches. Lipitor 40 mg and metoprolol succinate still show no price. Check rules still passes 10 of 10 and does not call RxNorm.</li>
           <li><strong>What broke / changed in PRD:</strong> v2 says the risky step is the lookup returning an ingredient without a salt or release type. The rules stay the decision. Photo upload is still not built.</li>
-          <li><strong>Problem:</strong> Opening the HTML file from the disk cannot call RxNorm. The page has to be opened over http, including the published prototype URL. PostHog is installed on the product page and the prototype. Pageviews and clicks record when the page is opened over http. Session replay records when it is turned on in the PostHog project.</li>
+          <li><strong>Problem:</strong> Opening the HTML file from the disk cannot call RxNorm. The page has to be opened over http, including the published prototype URL. PostHog is installed on the product page and the prototype. Pageviews and clicks record when the page is opened over http. Session replay is disabled in the page configuration.</li>
           <li><strong>Cost & time this week:</strong> $0.00 on this RxNorm step. I spent 1 hour on Sunday, November 15.</li>
         </ul>
       </div>
@@ -322,7 +322,7 @@
       <div class="log-entry">
         <h3>Build 3 · November 18 and November 22, 2026 (Due Nov 23)</h3>
         <ul>
-          <li><strong>What shipped:</strong> On November 18 the prototype gained prescription reading, refill reminders, seller ranking, and the dark page. On November 22 the repo gained GitHub Actions tests, a Render blueprint with preview deploys and a rollback path, SQL migrations for a separate development database and production database, and a per-visitor limit of 20 paid or saved requests before HTTP 429. PostHog pageviews, clicks, and session replay are still on the live GitHub Pages site. The events already include find, result, saved prescription, placed order, and rated seller.</li>
+          <li><strong>What shipped:</strong> On November 18 the prototype gained prescription reading, refill reminders, seller ranking, and the dark page. On November 22 the repo gained GitHub Actions tests, a Render blueprint with preview deploys and a rollback path, SQL migrations for a separate development database and production database, and a per-visitor limit of 20 paid or saved requests before HTTP 429. PostHog pageviews and clicks were configured for GitHub Pages. The events already include find, result, saved prescription, placed order, and rated seller.</li>
           <li><strong>What broke / changed in PRD:</strong> PRD v3 replaces the line that said photo upload was not built. That line stayed up after the upload feature shipped. The server also listened only on localhost, which would have made Render unreachable. GitHub Pages still cannot run the model. Render and Supabase are not connected, so the 429 limit and the database are not on the public site yet.</li>
           <li><strong>Cost & time this week:</strong> $0.00 for hosting and for OpenRouter on this change. The earlier keyed lookup remains about $0.04. The OpenRouter monthly cap is not set. I spent 1 hour on Build 3. With Build 2, the running total is 6 hours.</li>
         </ul>
