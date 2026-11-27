@@ -145,7 +145,8 @@
     .result-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
     .result-title { margin: 0; font-weight: 600; font-size: 17px; }
     .badge { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 10px; border-radius: 999px; border: 1px solid currentColor; }
-    .badge.sample { color: var(--reject); }
+    .seller-list { margin: 6px 0 2px; padding-left: 20px; }
+    .seller-list li { margin: 2px 0; }
     .result details { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
     .result summary { cursor: pointer; font-weight: 500; min-height: 32px; display: flex; align-items: center; }
     .result details p { font-size: 15px; }
@@ -209,7 +210,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
       </button>
     </div>
-    <p class="wrap strip" role="note">Not medical advice. Check with your pharmacist before switching. Seller ratings are demo data, and prices marked Sample are illustrations.</p>
+    <p class="wrap strip" role="note">Not medical advice. Check with your pharmacist before switching. Prices and sellers come from live listings, so confirm on the seller's page before you order.</p>
   </header>
 
   <main class="log" id="log">
@@ -262,7 +263,6 @@
   <script src="match.js"></script>
   <script src="refill.js"></script>
   <script src="ranking.js"></script>
-  <script src="sellers.js"></script>
   <script src="clinic.js"></script>
   <script src="extract.js"></script>
   <script src="chat.js"></script>

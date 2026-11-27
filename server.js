@@ -45,6 +45,17 @@ function normalizeName(value) {
   return String(value || "").trim().toLowerCase().replace(/-/g, " ").replace(/\s+/g, " ");
 }
 
+// "levothyroxine sodium 0.05 MG Oral Tablet [Synthroid]" -> "levothyroxine sodium".
+function genericName(rxnormName) {
+  return String(rxnormName || "")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/\b\d+\s*hr\b/gi, " ")
+    .replace(/\d+(?:\.\d+)?\s*(mg|mcg|g|unt\/ml|units\/ml|ml)\b.*$/i, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function isBlocked(name) {
   var query = normalizeName(name);
   return BLOCKED.some(function (phrase) {
@@ -99,9 +110,13 @@ function cleanSupplier(row) {
   if (!row || typeof row !== "object") return null;
   var pageUrl = String(row.pageUrl || "");
   if (pageUrl.indexOf("https://") !== 0) return null;
-  var packPrice = Number(row.packPrice);
-  var packCount = Number(row.packCount);
-  if (!isFinite(packPrice) || packPrice <= 0 || !isFinite(packCount) || packCount <= 0) return null;
+  // A listing the search found without a visible price is kept, with no price. match.js still checks
+  // it, and the page shows it as "price on the seller's page". No price is estimated.
+  var packPrice = row.packPrice == null || row.packPrice === "" ? NaN : Number(row.packPrice);
+  var packCount = row.packCount == null || row.packCount === "" ? NaN : Number(row.packCount);
+  if (!isFinite(packPrice) || packPrice <= 0) packPrice = null;
+  if (!isFinite(packCount) || packCount <= 0) packCount = null;
+  if (packPrice == null) packCount = packCount || null;
   var kind = normalizeName(row.shippingKind);
   if (kind !== "page" && kind !== "estimate" && kind !== "unstated") kind = "unstated";
   var shippingAmount = row.shippingAmount == null || row.shippingAmount === "" ? null : Number(row.shippingAmount);
@@ -161,19 +176,79 @@ function usdInrRate() {
   });
 }
 
+// Pharmacy pages publish their own product data for search engines (schema.org JSON-LD), for example
+// {"@type":"Drug","name":"Prolomet Xl 50Mg Strip Of 10 Tablets","offers":{"price":"48.64","priceCurrency":"INR"}}.
+// A price is taken only from that block, and only when the pack size is also on the page. No estimate.
+function offerNodes(node, out) {
+  if (!node || typeof node !== "object") return out;
+  if (Array.isArray(node)) {
+    node.forEach(function (item) { offerNodes(item, out); });
+    return out;
+  }
+  if (node.offers) out.push(node);
+  Object.keys(node).forEach(function (key) { if (key !== "offers") offerNodes(node[key], out); });
+  return out;
+}
+
+function packCountFrom(text) {
+  var value = String(text || "").replace(/&#39;|&#x27;|’/g, "'");
+  var match = value.match(/\b(?:strip|bottle|pack|box|packet|tube|vial|jar)\s+of\s+(\d{1,4})\b/i) ||
+    value.match(/\b(\d{1,4})\s*'s\b/i) ||
+    value.match(/\((\d{1,4})\)/) ||
+    value.match(/-(\d{1,4})-s(?:[/?#]|$)/i) ||
+    value.match(/\b(\d{1,4})\s+(?:tablets|capsules)\b/i);
+  var count = match ? Number(match[1]) : NaN;
+  return isFinite(count) && count > 0 && count <= 1000 ? count : null;
+}
+
+function readPagePrice(html, url) {
+  var text = String(html || "");
+  var nodes = [];
+  (text.match(/<script[^>]*application\/ld\+json[^>]*>[\s\S]*?<\/script>/gi) || []).forEach(function (block) {
+    try {
+      offerNodes(JSON.parse(block.replace(/^<script[^>]*>/i, "").replace(/<\/script>$/i, "")), nodes);
+    } catch (error) {}
+  });
+  var title = (text.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1] || "";
+  for (var i = 0; i < nodes.length; i += 1) {
+    var offer = Array.isArray(nodes[i].offers) ? nodes[i].offers[0] : nodes[i].offers;
+    var price = offer ? Number(offer.price != null ? offer.price : offer.lowPrice) : NaN;
+    var currency = String((offer && offer.priceCurrency) || "INR").toUpperCase();
+    if (!isFinite(price) || price <= 0 || currency !== "INR") continue;
+    var count = packCountFrom(nodes[i].name) || packCountFrom(title) || packCountFrom(url);
+    if (!count) continue;
+    return { packPrice: Math.round(price * 100) / 100, packCount: count };
+  }
+  return null;
+}
+
+// Keeps rows whose page opens. While the page is open, an Indian listing's price and pack size are
+// read from the page's own product data, which is more reliable than a search snippet.
 function keepLivePages(rows) {
   return Promise.all(rows.map(function (row) {
     var controller = new AbortController();
-    var timer = setTimeout(function () { controller.abort(); }, 8000);
+    var timer = setTimeout(function () { controller.abort(); }, 12000);
     return fetch(row.pageUrl, {
       method: "GET",
       redirect: "follow",
       signal: controller.signal,
-      headers: { "User-Agent": "Mozilla/5.0" }
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36" }
     }).then(function (response) {
-      clearTimeout(timer);
-      if (response.body && response.body.cancel) response.body.cancel();
-      return (response.status >= 200 && response.status < 400) || response.status === 403 ? row : null;
+      var opens = (response.status >= 200 && response.status < 400) || response.status === 403;
+      if (!opens || row.currency !== "INR" || response.status !== 200) {
+        clearTimeout(timer);
+        if (response.body && response.body.cancel) response.body.cancel();
+        return opens ? row : null;
+      }
+      return response.text().then(function (html) {
+        clearTimeout(timer);
+        var found = readPagePrice(html.slice(0, 5000000), row.pageUrl);
+        if (found) return Object.assign({}, row, found, { priceSource: "page" });
+        return Object.assign({}, row, { priceSource: row.packPrice != null ? "search" : "" });
+      }).catch(function () {
+        clearTimeout(timer);
+        return row;
+      });
     }).catch(function () {
       clearTimeout(timer);
       return null;
@@ -193,26 +268,34 @@ function askModel(input) {
     "Search Indian online pharmacies for this medicine.",
     "Return only JSON with two keys: suppliers and us.",
     "Each item needs supplier, brand, ingredient, salt, strengthValue, strengthUnit, form, release, packCount, packPrice, currency, shippingAmount, shippingKind, shippingBasis, pageUrl.",
-    "salt is calcium, sodium, hydrochloride, succinate, or tartrate.",
+    "ingredient is the active ingredient name only, such as atorvastatin or levothyroxine, without the salt, strength, or form.",
+    "salt is calcium, sodium, hydrochloride, succinate, or tartrate, and only when the page or its composition names it. If the page does not name a salt, salt is null. Do not fill it in from what you know.",
     "form is tablet, capsule, or injection. release is IR or ER. currency is INR.",
     "shippingKind is page, estimate, or unstated. If shipping is not stated, shippingKind is unstated and shippingAmount is null.",
     "If shippingKind is estimate, shippingBasis must explain the basis in one sentence.",
-    "Use only https URLs from 1mg.com, pharmeasy.in, netmeds.com, or apollopharmacy.in that appear in search results.",
+    "Use only https URLs from pharmeasy.in, netmeds.com, apollopharmacy.in, or 1mg.com that appear in search results.",
+    "Use a different pharmacy for each listing when you can, and prefer pharmeasy.in, netmeds.com, and apollopharmacy.in product pages.",
     "Also return us: one United States retail price for the same ingredient, strength, form, and release.",
     "us needs supplier, brand, ingredient, salt, strengthValue, strengthUnit, form, release, packCount, packPrice, currency, pageUrl.",
     "us.currency is USD. us.pageUrl must be on costplusdrugs.com, goodrx.com, drugs.com, or singlecare.com, not a manufacturer document.",
     "us.packPrice must be a number greater than 0 taken from that page. If the page does not show a price, set us to null.",
+    "Prefer listing pages whose pack price and pack size appear in the search results. If a listing's price is not visible, packPrice is null. Do not estimate it.",
     "Do not invent a URL, a price, or a shipping figure. If you cannot find a page, use an empty suppliers array or us null."
   ].join(" ");
+  // A US brand such as Synthroid is often not sold in India under that name, so the search asks
+  // for the generic ingredient. match.js still checks every row returned.
+  var generic = genericName(input.rxnormName) || input.name || "";
   var question = [
     "Find up to 3 current listings sold in India for",
-    input.name || "",
+    generic,
     input.strength || "",
     input.form || "",
     (input.release || "") + ".",
+    input.name && normalizeName(input.name) !== normalizeName(generic) ? "The patient's US medicine is " + input.name + "." : "",
     input.rxnormName ? "The standardized name is " + input.rxnormName + "." : "",
+    "Indian pharmacies usually sell it under other brand names. Any brand counts when the ingredient, salt, strength, form, and release are the same.",
     "Also find one United States retail price for the same strength."
-  ].join(" ");
+  ].join(" ").replace(/\s+/g, " ");
 
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -241,8 +324,13 @@ function askModel(input) {
         parsed = { suppliers: [] };
       }
       var candidates = (parsed.suppliers || []).map(cleanSupplier).filter(Boolean).slice(0, 5);
+      if (process.env.MEDFINDER_DEBUG_LISTINGS === "1") {
+        console.log("[listings] question: " + question);
+        console.log("[listings] raw model output: " + String(text || "").slice(0, 3000));
+        console.log("[listings] rows after cleanSupplier: " + candidates.length);
+      }
       var usCandidate = cleanSupplier(parsed.us);
-      if (usCandidate && (usCandidate.currency !== "USD" || !allowedUsHost(usCandidate.pageUrl))) usCandidate = null;
+      if (usCandidate && (usCandidate.currency !== "USD" || !allowedUsHost(usCandidate.pageUrl) || usCandidate.packPrice == null || usCandidate.packCount == null)) usCandidate = null;
       return Promise.all([
         keepLivePages(candidates),
         usCandidate ? keepLivePages([usCandidate]) : Promise.resolve([]),
@@ -399,13 +487,22 @@ function createServer(options) {
         sendJson(response, 200, { ok: false, reason: "blocked", suppliers: [], model: MODEL, costUsd: null });
         return null;
       }
-      return ask({
+      var query = {
         name: body.name,
         strength: body.strength,
         form: body.form,
         release: body.release,
         rxnormName: body.rxnormName || "",
         rxcui: body.rxcui || ""
+      };
+      // Search results vary from call to call. One empty answer is retried once, and both costs count.
+      return ask(query).then(function (first) {
+        if (!first || first.ok === false || (first.suppliers && first.suppliers.length)) return first;
+        return ask(query).then(function (second) {
+          if (!second || second.ok === false) return first;
+          var cost = (typeof first.costUsd === "number" ? first.costUsd : 0) + (typeof second.costUsd === "number" ? second.costUsd : 0);
+          return Object.assign({}, second, { costUsd: cost || null, attempts: 2 });
+        });
       }).then(function (result) {
         sendJson(response, 200, result);
       });
@@ -474,4 +571,10 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createServer: createServer, listenHost: listenHost, allowedOrigins: allowedOrigins };
+module.exports = {
+  createServer: createServer,
+  listenHost: listenHost,
+  allowedOrigins: allowedOrigins,
+  genericName: genericName,
+  readPagePrice: readPagePrice
+};

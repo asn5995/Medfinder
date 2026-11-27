@@ -5,17 +5,20 @@ window.MEDFINDER_IDENTITIES = [
   {
     names: ["lipitor", "atorvastatin"],
     ingredient: "atorvastatin",
-    salt: "calcium"
+    salt: "calcium",
+    singleSalt: true
   },
   {
     names: ["synthroid", "levothyroxine"],
     ingredient: "levothyroxine",
-    salt: "sodium"
+    salt: "sodium",
+    singleSalt: true
   },
   {
     names: ["glucophage", "metformin"],
     ingredient: "metformin",
-    salt: "hydrochloride"
+    salt: "hydrochloride",
+    singleSalt: true
   },
   {
     names: ["toprol xl", "metoprolol succinate"],

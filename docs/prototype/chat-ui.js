@@ -8,7 +8,6 @@
   var clinic = window.MedFinderClinic;
   var refill = window.MedFinderRefill;
   var ranking = window.MedFinderRanking;
-  var sellers = window.MedFinderSellers;
   var match = window.MedFinder;
   var lookup = window.MedFinderLookup;
   // config.js picks the server: this one, or the Render service when the page is on GitHub Pages.
@@ -16,7 +15,8 @@
   var remoteServer = !!window.MEDFINDER_API_BASE;
   var STORAGE_KEY = "medfinder-clinic-v1";
   var MAX_FILE = 8 * 1024 * 1024;
-  var SAMPLES = [
+  // Shortcuts that fill in a medicine. Each one runs the same live search as typed input.
+  var EXAMPLES = [
     { label: "Lipitor 20 mg", name: "Lipitor", strength: "20 mg", form: "tablet", release: "IR" },
     { label: "Synthroid 50 mcg", name: "Synthroid", strength: "50 mcg", form: "tablet", release: "IR" },
     { label: "Lipitor 40 mg", name: "Lipitor", strength: "40 mg", form: "tablet", release: "IR" },
@@ -123,8 +123,17 @@
     }).catch(function () {});
   }
 
+  // Only real sellers: the ones you ordered from after a live search, scored on your own
+  // fulfilled orders and ratings in this browser. No made-up review history.
   function rankedSellers() {
-    return ranking.orderShares(clinic.projectSellers(sellers.list(), state.orders));
+    var seen = {};
+    var own = [];
+    state.orders.forEach(function (order) {
+      if (!order.sellerId || seen[order.sellerId]) return;
+      seen[order.sellerId] = true;
+      own.push({ id: order.sellerId, name: order.sellerName || order.sellerId, ratings: [], assignedCount: 0, fulfilledCount: 0 });
+    });
+    return ranking.orderShares(clinic.projectSellers(own, state.orders));
   }
 
   // ---------- messages ----------
@@ -194,46 +203,48 @@
 
   // ---------- the intake conversation ----------
 
+  // The chat, prescription reading, and live search all run on the server. Without it, nothing is
+  // searched and no prices are shown.
   function offlineText() {
     if (keyMissing) return keyMissingText();
     if (location.protocol === "file:") {
-      return "This page was opened from a file, so it can't reach the MedFinder server. Run node server.js and open http://127.0.0.1:8787/prototype/. You can still try a sample medicine below.";
+      return "This page was opened from a file, so it can't reach the MedFinder server. Run node server.js and open http://127.0.0.1:8787/prototype/.";
     }
     if (remoteServer) {
-      return "I couldn't reach the MedFinder server. It may still be starting up, which can take about a minute. Tap Try again, or try a sample medicine below. Samples use the sample catalog and the same match rules.";
+      return "I couldn't reach the MedFinder server, which runs the chat and the live search. It may still be starting up, which can take about a minute. Tap Try again.";
     }
-    return "The MedFinder server isn't answering. Check that node server.js is running, then tap Try again. You can still try a sample medicine below.";
+    return "The MedFinder server isn't answering. Check that node server.js is running, then tap Try again.";
   }
 
   function offlineChoices() {
-    return [{ label: "Try again", primary: true, onClick: function () { me("Try again"); reconnect(); } }].concat(sampleChoices());
+    return [{ label: "Try again", primary: true, onClick: function () { me("Try again"); reconnect(); } }];
   }
 
-  function sampleChoices() {
-    return SAMPLES.map(function (sample) {
+  function exampleChoices() {
+    return EXAMPLES.map(function (example) {
       return {
-        label: sample.label,
+        label: example.label,
         onClick: function () {
-          me(sample.label);
-          track("clicked_example", { drug_name: sample.name, strength: sample.strength });
+          me(example.label);
+          track("clicked_example", { drug_name: example.name, strength: example.strength });
           session = freshSession();
-          session.draft = chat.normalizeDraft(sample);
+          session.draft = chat.normalizeDraft(example);
           showSummary();
         }
       };
     });
   }
 
-  function showSamples() {
-    bot("Pick a sample. Samples use the sample catalog, not live listings.", sampleChoices());
+  function showExamples() {
+    bot("Pick an example. I'll run the same live search as for anything you type.", exampleChoices());
   }
 
   function fieldChoices(field) {
     if (field === "name") {
-      var choices = [];
-      if (online !== false) choices.push({ label: "📎 Attach a prescription", keep: true, onClick: function () { fileInput.click(); } });
-      choices.push({ label: "Try a sample", onClick: function () { me("Try a sample"); showSamples(); } });
-      return choices;
+      return [
+        { label: "📎 Attach a prescription", keep: true, onClick: function () { fileInput.click(); } },
+        { label: "Try an example", onClick: function () { me("Try an example"); showExamples(); } }
+      ];
     }
     return chat.askFor(field).choices.map(function (choice) {
       return {
@@ -360,7 +371,7 @@
         session.history.pop();
         bot(result.message || "The assistant isn't answering right now.", [
           { label: "Try again", primary: true, onClick: function () { me("Try again"); sendTurn(text); } }
-        ].concat(sampleChoices()));
+        ].concat(exampleChoices()));
         return;
       }
       online = true;
@@ -501,37 +512,62 @@
     return "RxNorm: " + identity.name + " (RxCUI " + identity.rxcui + ")";
   }
 
+  // Priced listings first, cheapest first, then listings whose price is only on the seller's page.
+  function orderedListings(result) {
+    var all = result.filtered.suppliers;
+    var priced = all.filter(function (row) { return row.cost; }).sort(function (a, b) { return a.cost.landed - b.cost.landed; });
+    return priced.concat(all.filter(function (row) { return !row.cost; }));
+  }
+
   function resultCard(result) {
     var box = el("div", "result");
     var head = el("div", "result-head");
     var title = el("p", "result-title");
     var lines = [];
     var details = [];
-    var sample = false;
 
+    var sellerList = null;
     if (result.kind === "suppliers") {
       box.classList.add("exact");
-      var rows = result.filtered.suppliers.slice().sort(function (a, b) { return a.cost.landed - b.cost.landed; });
-      var best = rows[0];
+      var rows = orderedListings(result);
+      var best = rows[0] && rows[0].cost ? rows[0] : null;
       var rate = result.live && result.live.usdInr && result.live.usdInr.rate;
       title.textContent = "✓ Verified in India · " + rows.length + " listing" + (rows.length === 1 ? "" : "s");
-      lines.push((best.cost.shippingIncluded ? "From " : "Drug cost from ") + formatAmount(best.cost.landed, best.currency) + " for 90 days (" + best.supplier + ").");
-      if (result.us) {
+      if (best) {
+        lines.push((best.cost.shippingIncluded ? "From " : "Drug cost from ") + formatAmount(best.cost.landed, best.currency) + " for 90 days (" + best.supplier + ").");
+      } else {
+        lines.push("These listings match on every rule. The search couldn't see their prices, so the current price is on each seller's page.");
+      }
+      if (result.us && best) {
         lines.push("US price " + formatAmount(result.us.cost.landed, "USD") + " for the same " + result.us.cost.units + " units.");
         var bestUsd = inUsd(best, rate);
         if (bestUsd != null) {
           var save = result.us.cost.landed - bestUsd;
           lines.push(save >= 0 ? "About " + formatAmount(save, "USD") + " less than the US price." : "The US price is about " + formatAmount(-save, "USD") + " lower.");
         }
-      } else {
+      } else if (best) {
         lines.push("No US price for the same strength was found, so savings are not shown.");
       }
+      // The sellers stay visible on the card. Pack and shipping details are under Details.
+      sellerList = el("ul", "seller-list");
+      rows.forEach(function (row) {
+        var item = el("li");
+        var link = el("a", "", (row.supplier || "Seller") + (row.brand ? " · " + row.brand : ""));
+        link.href = row.pageUrl;
+        link.target = "_blank";
+        link.rel = "noopener";
+        item.appendChild(link);
+        item.appendChild(el("span", "hint", " · " + (row.cost ? formatAmount(row.cost.landed, row.currency) + " for 90 days" : "price on seller's page")));
+        sellerList.appendChild(item);
+      });
       details.push(escapeHtml(result.filtered.message));
       rows.forEach(function (row) {
         details.push("<strong>" + escapeHtml(row.supplier || "Supplier") + "</strong>" + (row.brand ? " · " + escapeHtml(row.brand) : "") + "<br>" +
           escapeHtml(row.ingredient + (row.salt ? " " + row.salt : "") + ", " + match.formatStrength(row.strength) + " " + row.form + ", " + row.release) + "<br>" +
-          "Pack of " + row.cost.packCount + " at " + escapeHtml(formatAmount(row.packPrice, row.currency)) + " · " + row.cost.packs + " packs for 90 days<br>" +
-          escapeHtml(shippingText(row)) + "<br>" +
+          (row.cost
+            ? "Pack of " + row.cost.packCount + " at " + escapeHtml(formatAmount(row.packPrice, row.currency)) + " · " + row.cost.packs + " packs for 90 days" +
+              (row.priceSource === "page" ? " · price read from the seller's page" : " · price from the search results") + "<br>" + escapeHtml(shippingText(row)) + "<br>"
+            : "The price wasn't visible in the search results. It is on the seller's page.<br>") +
           "<a href='" + escapeHtml(row.pageUrl) + "' target='_blank' rel='noopener'>Source page</a>");
       });
       if (result.us) {
@@ -540,45 +576,37 @@
       }
       if (rate) details.push(escapeHtml("Savings use 1 USD = ₹" + Number(rate).toFixed(2) + (result.live.usdInr.date ? " on " + result.live.usdInr.date : "") + "."));
       if (result.live && result.live.costUsd != null) details.push("This lookup cost $" + Number(result.live.costUsd).toFixed(4) + ".");
-    } else if (result.kind === "sample") {
-      sample = true;
-      box.classList.add("exact");
-      var product = result.local.product;
-      var cost = result.local.cost;
-      title.textContent = "✓ Exact match · " + product.brand;
-      lines.push("Landed cost " + match.money(cost.landedCents) + " for 90 days, shipping included.");
-      lines.push("US price " + match.money(product.us90DayCents) + " for the same " + cost.units + " units, so about " + match.money(product.us90DayCents - cost.landedCents) + " less.");
-      details.push(escapeHtml(result.local.message));
-      details.push(escapeHtml(product.brand + " · " + product.manufacturer + " · " + product.ingredient + " " + product.salt + ", " +
-        match.formatStrength(product.strength) + " " + product.form + ", " + product.release));
-      details.push(escapeHtml("Pack of " + product.packCount + " at " + match.money(product.packPriceCents) + " · " + cost.packs + " packs for 90 days · shipping " + match.money(cost.shippingCents)));
-      if (result.note) details.push(escapeHtml(result.note));
-    } else if (result.kind === "reject" || result.kind === "sample_reject") {
-      sample = result.kind === "sample_reject";
+    } else if (result.kind === "reject") {
       box.classList.add("reject");
       title.textContent = "✗ Not a match";
-      lines.push(result.kind === "reject" ? result.message : result.local.message);
-      lines.push("No price is shown." + (sample && result.local.product ? " The closest sample listing is " + result.local.product.brand + "." : ""));
-      if (result.note) details.push(escapeHtml(result.note));
+      lines.push(result.message);
+      lines.push("The live listings found don't match on every rule, so no price is shown.");
+    } else if (result.kind === "none") {
+      box.classList.add("unknown");
+      title.textContent = "No verified listing found";
+      lines.push("The live search didn't return an Indian listing with a working page for this exact medicine. Nothing is shown rather than a guess.");
     } else if (result.kind === "blocked") {
       box.classList.add("blocked");
       title.textContent = "Not available here";
-      lines.push(result.local.message);
+      lines.push((result.local && result.local.status === "blocked" && result.local.message) || "MedFinder does not suggest a source for this medicine.");
     } else if (result.kind === "invalid") {
       box.classList.add("unknown");
       title.textContent = "Need more detail";
       lines.push(result.local.message);
+    } else if (result.kind === "error") {
+      box.classList.add("unknown");
+      title.textContent = "Search didn't finish";
+      lines.push(result.message);
     } else {
       box.classList.add("unknown");
-      title.textContent = "Not in the sample table";
-      lines.push(result.local ? result.local.message : "No result.");
-      if (result.note) lines.push(result.note);
+      title.textContent = "Couldn't reach the MedFinder server";
+      lines.push("The live search runs on the MedFinder server, and it isn't answering right now. No prices are shown without it.");
     }
 
     head.appendChild(title);
-    if (sample) head.appendChild(el("span", "badge sample", "Sample data"));
     box.appendChild(head);
     lines.forEach(function (line) { box.appendChild(el("p", "", line)); });
+    if (sellerList) box.appendChild(sellerList);
     var rx = rxnormText(result.identity);
     if (rx) details.unshift(escapeHtml(rx));
     if (details.length) {
@@ -591,7 +619,7 @@
       });
       box.appendChild(more);
     }
-    box.appendChild(el("p", "warn", "Not medical advice. Confirm with a pharmacist before switching." + (sample ? " Sample prices are illustrations, not live listings." : "")));
+    box.appendChild(el("p", "warn", "Not medical advice. Confirm with a pharmacist before switching."));
     return box;
   }
 
@@ -625,12 +653,16 @@
   function afterSearch(result) {
     session.mode = "after_search";
     var choices = [];
-    if (result.kind !== "blocked") {
+    // An order needs a real seller, so saving is offered only after verified live listings.
+    if (result.kind === "suppliers") {
       choices.push({ label: "Save & set a refill reminder", primary: true, onClick: function () { me("Save & set a refill reminder"); startSave(); } });
+    }
+    if (result.kind === "unavailable" || result.kind === "error") {
+      choices.push({ label: "Search again", primary: true, onClick: function () { me("Search again"); online = null; ensureServer().then(function () { runSearch(); }); } });
     }
     if (queueChoice()) choices.push(queueChoice());
     choices.push(anotherChoice());
-    bot("Tap Details on the card for more. What would you like to do next?", choices);
+    bot(result.kind === "suppliers" ? "Tap Details on the card to see each listing. What would you like to do next?" : "What would you like to do next?", choices);
   }
 
   function restart() {
@@ -679,15 +711,18 @@
   function liveSellers() {
     var result = session.lastResult;
     if (!result || result.kind !== "suppliers") return [];
-    return result.filtered.suppliers.slice().sort(function (a, b) { return a.cost.landed - b.cost.landed; }).map(function (row) {
+    var mine = rankedSellers();
+    return orderedListings(result).map(function (row) {
       var name = row.supplier || "Supplier";
-      // A live seller with the same name as a seller in the ranking keeps that seller's record.
-      var known = sellers.list().filter(function (seller) { return seller.name.toLowerCase() === name.toLowerCase(); })[0];
+      var id = "live-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      // If you have rated this seller before, your own average is shown next to it.
+      var past = mine.filter(function (seller) { return seller.id === id && seller.ratingCount > 0; })[0];
       return {
-        id: known ? known.id : "live-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+        id: id,
         name: name,
         pageUrl: row.pageUrl,
-        label: name + " · " + formatAmount(row.cost.landed, row.currency) + " for 90 days"
+        label: name + (row.brand ? " · " + row.brand : "") + " · " + (row.cost ? formatAmount(row.cost.landed, row.currency) + " for 90 days" : "price on seller's page") +
+          (past ? " · you rated " + past.rawAverage.toFixed(1) + "★" : "")
       };
     });
   }
@@ -695,19 +730,13 @@
   function askSeller() {
     session.mode = "save_seller";
     var live = liveSellers();
-    if (live.length) {
-      bot("Which seller should this order go to? These are the listings the search found and verified, cheapest first.", live.map(function (seller) {
-        return { label: seller.label, onClick: function () { me(seller.label); setSeller(seller.id, seller.name, seller.pageUrl); } };
-      }));
+    if (!live.length) {
+      bot("Saving an order needs a verified live listing. Search for the medicine first.", [anotherChoice()]);
       return;
     }
-    var top = rankedSellers().slice(0, 3);
-    var choices = [{ label: "Let the ranking pick", primary: true, onClick: function () { me("Let the ranking pick"); setSeller(""); } }];
-    top.forEach(function (seller) {
-      var label = seller.name + " · " + seller.ratingAverage.toFixed(1) + "★";
-      choices.push({ label: label, onClick: function () { me(label); setSeller(seller.id); } });
-    });
-    bot("Which seller should this order go to? This result came from the sample catalog, so these are the demo sellers, ranked by smoothed ratings and fulfillment.", choices);
+    bot("Which seller should this order go to? These are the listings the search found and verified, cheapest first.", live.map(function (seller) {
+      return { label: seller.label, onClick: function () { me(seller.label); setSeller(seller.id, seller.name, seller.pageUrl); } };
+    }));
   }
 
   function setSeller(id, name, pageUrl) {
@@ -737,7 +766,7 @@
       { label: "Supply", value: plan.supplyDays + " days from today" },
       { label: "Next refill", value: niceDate(plan.refillDueOn) },
       { label: "Reminder", value: niceDate(plan.reminderOn) + " (" + plan.leadDays + " days before)" },
-      { label: "Seller", value: session.save.sellerName || "Chosen by the ranking when you save" }
+      { label: "Seller", value: session.save.sellerName }
     ]));
     if (session.save.sellerUrl) {
       var link = el("a", "", "Open " + session.save.sellerName + "'s page");
@@ -788,7 +817,7 @@
       sellerId: session.save.sellerId || "",
       sellerName: session.save.sellerName || ""
     }), {
-      sellers: clinic.projectSellers(sellers.list(), state.orders),
+      sellers: [],
       random: Math.random,
       matchDrug: match.matchDrug
     });
@@ -831,15 +860,9 @@
     if (mode === "save_seller") {
       var lower = text.toLowerCase();
       var live = liveSellers();
-      if (live.length) {
-        var pick = live.filter(function (seller) { return lower.indexOf(seller.name.toLowerCase()) !== -1; })[0];
-        if (!pick && /cheap|lowest|first|any|you choose|don'?t care|whatever/i.test(text)) pick = live[0];
-        if (pick) return setSeller(pick.id, pick.name, pick.pageUrl);
-        return askSeller();
-      }
-      var found = rankedSellers().filter(function (seller) { return lower.indexOf(seller.name.toLowerCase()) !== -1; })[0];
-      if (found) return setSeller(found.id);
-      if (/rank|pick|any|you choose|don'?t care|whatever|default/i.test(text)) return setSeller("");
+      var pick = live.filter(function (seller) { return lower.indexOf(seller.name.toLowerCase()) !== -1; })[0];
+      if (!pick && /cheap|lowest|first|any|you choose|don'?t care|whatever/i.test(text)) pick = live[0];
+      if (pick) return setSeller(pick.id, pick.name, pick.pageUrl);
       return askSeller();
     }
     if (mode === "confirm_save") {
@@ -954,28 +977,24 @@
     });
     body.appendChild(meds);
 
-    var board = el("details", "board");
-    board.appendChild(el("summary", "", "Seller ranking (demo data)"));
-    var list = el("ol");
-    rankedSellers().forEach(function (seller) {
-      var li = el("li");
-      li.appendChild(el("strong", "", seller.name));
-      li.appendChild(el("span", "hint", " · " + seller.ratingAverage.toFixed(2) + "★ smoothed from " + seller.ratingCount + " rating" + (seller.ratingCount === 1 ? "" : "s") +
-        " · " + Math.round(seller.reliability * 100) + "% fulfilled · gets about " + (seller.share * 100).toFixed(0) + "% of assigned orders"));
-      list.appendChild(li);
-    });
-    board.appendChild(list);
-    board.appendChild(el("p", "hint", "One new 5-star rating does not jump a seller ahead of a longer record."));
-    body.appendChild(board);
+    var mine = rankedSellers();
+    if (mine.length) {
+      var board = el("details", "board");
+      board.appendChild(el("summary", "", "Your sellers, ranked by your ratings"));
+      var list = el("ol");
+      mine.forEach(function (seller) {
+        var li = el("li");
+        li.appendChild(el("strong", "", seller.name));
+        li.appendChild(el("span", "hint", " · " + (seller.ratingCount ? seller.ratingAverage.toFixed(2) + "★ smoothed from your " + seller.ratingCount + " rating" + (seller.ratingCount === 1 ? "" : "s") : "not rated yet") +
+          " · " + seller.fulfilledCount + " of " + seller.assignedCount + " orders fulfilled"));
+        list.appendChild(li);
+      });
+      board.appendChild(list);
+      board.appendChild(el("p", "hint", "Built only from your own orders and ratings in this browser. One new 5-star rating does not jump a seller ahead of a longer record."));
+      body.appendChild(board);
+    }
 
-    var demo = el("div", "row-actions");
-    var sample = el("button", "small", "Load sample orders");
-    sample.type = "button";
-    sample.addEventListener("click", function () {
-      state = clinic.sampleState(today, sellers.list());
-      persist();
-      renderPanel();
-    });
+    var actions = el("div", "row-actions");
     var clear = el("button", "small", "Clear this browser's saved data");
     clear.type = "button";
     clear.addEventListener("click", function () {
@@ -983,10 +1002,8 @@
       try { localStorage.removeItem(STORAGE_KEY); } catch (error) {}
       renderPanel();
     });
-    demo.appendChild(sample);
-    demo.appendChild(clear);
-    body.appendChild(demo);
-    body.appendChild(el("p", "hint", "Sample orders replace what this browser has saved."));
+    actions.appendChild(clear);
+    body.appendChild(actions);
   }
 
   function openPanel() {
@@ -1078,7 +1095,7 @@
   }
 
   function keyMissingText() {
-    return "The MedFinder server is running, but its OpenRouter key isn't set, so the chat and prescription reading are off. You can still try a sample medicine below.";
+    return "The MedFinder server is running, but its OpenRouter key isn't set, so the chat, prescription reading, and live search are off. Add the key in the server's settings, then tap Try again.";
   }
 
   function start() {
@@ -1096,8 +1113,8 @@
         document.getElementById("run-checks").click();
       }
       if (params.get("demo") === "lipitor") {
-        session.draft = chat.normalizeDraft(SAMPLES[0]);
-        bot("Here's the Lipitor 20 mg sample.");
+        session.draft = chat.normalizeDraft(EXAMPLES[0]);
+        bot("Here's the Lipitor 20 mg example.");
         showSummary();
         return;
       }

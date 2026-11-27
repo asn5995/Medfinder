@@ -88,6 +88,30 @@ test("only the published site may read answers from another origin", async funct
   }
 });
 
+test("an empty live search is retried once, a full one is not, and both costs are counted", async function () {
+  var calls = 0;
+  var answers = [
+    { ok: true, suppliers: [], us: null, costUsd: 0.005 },
+    { ok: true, suppliers: [{ supplier: "PharmEasy" }], us: null, costUsd: 0.006 },
+    { ok: true, suppliers: [{ supplier: "Netmeds" }], us: null, costUsd: 0.006 }
+  ];
+  var server = serverLib.createServer({ rateLimit: 100, ask: function () { calls += 1; return Promise.resolve(answers[calls - 1]); } });
+  var port = await listen(server);
+  try {
+    var body = JSON.stringify({ name: "Lipitor", strength: "20 mg", form: "tablet", release: "IR" });
+    var retried = await call(port, "POST", "/listings", { "Content-Type": "application/json" }, body);
+    assert.equal(calls, 2);
+    assert.equal(retried.body.suppliers[0].supplier, "PharmEasy");
+    assert.equal(retried.body.attempts, 2);
+    assert.equal(Math.round(retried.body.costUsd * 1000), 11);
+    var once = await call(port, "POST", "/listings", { "Content-Type": "application/json" }, body);
+    assert.equal(calls, 3, "a search that found listings is not repeated");
+    assert.equal(once.body.suppliers[0].supplier, "Netmeds");
+  } finally {
+    await new Promise(function (resolve) { server.close(resolve); });
+  }
+});
+
 test("the health check says whether the OpenRouter key is set, without showing it", async function () {
   var saved = process.env.OPENROUTER_API_KEY;
   var server = serverLib.createServer({});

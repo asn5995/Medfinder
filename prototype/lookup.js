@@ -5,10 +5,22 @@
 (function () {
   var cache = {};
 
-  function strengthNeedle(raw) {
+  // RxNorm writes 50 mcg as "0.05 MG", so both spellings are looked for.
+  function strengthNeedles(raw) {
     var match = String(raw || "").toLowerCase().replace(/\s+/g, "").match(/^(\d+(?:\.\d+)?)(mg|mcg|g|units\/ml)$/);
-    if (!match) return "";
-    return match[1] + " " + match[2].toUpperCase();
+    if (!match) return [];
+    var value = Number(match[1]);
+    var needles = [value + " " + match[2].toUpperCase()];
+    if (match[2] === "mcg") needles.push(String(value / 1000) + " MG");
+    if (match[2] === "g") needles.push(String(value * 1000) + " MG");
+    return needles;
+  }
+
+  function hasStrength(name, needles) {
+    var upper = " " + String(name || "").toUpperCase().replace(/\s+/g, " ");
+    return needles.some(function (needle) {
+      return new RegExp("[^\\d.]" + needle.replace(/[.]/g, "\\.") + "(?![A-Z/])").test(upper);
+    });
   }
 
   // All concept names RxNorm returns for a name. Cached, so the release check and the search
@@ -41,15 +53,12 @@
     return rxnormConcepts(name).then(function (result) {
       if (result.error) return { error: true };
       if (!result.concepts.length) return { found: false };
-      var needle = strengthNeedle(strength);
-      var picked = result.concepts[0];
-      if (needle) {
-        var matched = result.concepts.filter(function (concept) {
-          return concept.name.toUpperCase().indexOf(needle) !== -1;
-        });
-        if (matched.length) picked = matched[0];
-      }
-      return { found: true, rxcui: picked.rxcui, name: picked.name };
+      var needles = strengthNeedles(strength);
+      var matched = needles.length ? result.concepts.filter(function (concept) { return hasStrength(concept.name, needles); }) : [];
+      // A plain generic name ("levothyroxine sodium 0.05 MG Oral Tablet") is preferred over a branded pack.
+      var plainFirst = matched.filter(function (concept) { return concept.name.indexOf("[") === -1; }).concat(matched);
+      var picked = plainFirst[0] || result.concepts[0];
+      return { found: true, rxcui: picked.rxcui, name: picked.name, strengthMatched: matched.length > 0 };
     });
   }
 
@@ -59,16 +68,17 @@
     });
   }
 
-  function liveNote(live) {
-    if (!live || live.reason === "missing_key") return "The OpenRouter key is not set on the server, so the sample catalog is shown.";
-    if (live.reason === "model_error") return "The supplier lookup failed, so the sample catalog is shown.";
-    return "No live supplier page was returned, so the sample catalog is shown.";
+  function errorText(live) {
+    if (live && live.reason === "missing_key") return "The server's OpenRouter key isn't set, so the live search can't run.";
+    return "The live search didn't answer. Try again in a moment.";
   }
 
-  // Resolves to one of these kinds: suppliers, reject, sample, blocked, invalid, unknown.
+  // Live search only. No sample prices are ever shown.
+  // Resolves to one of these kinds: suppliers, reject, none, blocked, invalid, error, unavailable.
   function search(input) {
     var match = window.MedFinder;
     return identify(input.name, input.strength).then(function (identity) {
+      // match.js still refuses blocked drugs and incomplete details before anything is searched.
       var local = match.matchDrug(input);
       if (local.status === "blocked" || local.status === "invalid") {
         return { kind: local.status, local: local, identity: identity };
@@ -87,9 +97,13 @@
       }).then(function (response) {
         return response.json().then(function (live) {
           if (response.status === 429) {
-            return { kind: sampleKind(local), local: local, identity: identity, note: (live && live.message) || "Too many requests. Wait and try again." };
+            return { kind: "error", identity: identity, message: (live && live.message) || "Too many requests. Wait a few minutes and try again." };
           }
           if (!response.ok) throw new Error("supplier server");
+          if (live && live.ok === false) {
+            if (live.reason === "blocked") return { kind: "blocked", local: local, identity: identity };
+            return { kind: "error", identity: identity, message: errorText(live), live: live };
+          }
           var filtered = match.filterSuppliers(input, live.suppliers || [], identity && identity.name);
           if (filtered.status === "exact") {
             return { kind: "suppliers", filtered: filtered, identity: identity, live: live, us: match.usSupply(input, live.us) };
@@ -97,25 +111,12 @@
           if (filtered.status === "reject") {
             return { kind: "reject", message: filtered.message, identity: identity, live: live };
           }
-          return { kind: sampleKind(local), local: local, identity: identity, note: liveNote(live) };
+          return { kind: "none", identity: identity, live: live };
         });
       }).catch(function () {
-        return {
-          kind: sampleKind(local),
-          local: local,
-          identity: identity,
-          offline: true,
-          note: "The MedFinder server isn't reachable from this page, so the sample catalog is shown."
-        };
+        return { kind: "unavailable", identity: identity };
       });
     });
-  }
-
-  // A sample-table answer keeps its own status: exact, reject, or unknown.
-  function sampleKind(local) {
-    if (local.status === "exact") return "sample";
-    if (local.status === "reject") return "sample_reject";
-    return "unknown";
   }
 
   window.MedFinderLookup = {

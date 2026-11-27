@@ -73,8 +73,16 @@
     return key;
   }
 
+  // 50 mcg and 0.05 mg are the same dose. Any other unit has to match exactly.
+  var MCG_PER = { mcg: 1, mg: 1000, g: 1000000 };
+
   function sameStrength(left, right) {
-    return !!left && !!right && left.value === right.value && left.unit === right.unit;
+    if (!left || !right) return false;
+    if (left.unit === right.unit) return left.value === right.value;
+    if (MCG_PER[left.unit] && MCG_PER[right.unit]) {
+      return Math.round(left.value * MCG_PER[left.unit] * 1000) === Math.round(right.value * MCG_PER[right.unit] * 1000);
+    }
+    return false;
   }
 
   function money(cents) {
@@ -190,9 +198,15 @@
     if (!row || typeof row !== "object") return null;
     var pageUrl = String(row.pageUrl || "");
     if (pageUrl.indexOf("https://") !== 0) return null;
-    var packPrice = Number(row.packPrice);
-    var packCount = Number(row.packCount);
-    if (!isFinite(packPrice) || packPrice < 0 || !isFinite(packCount) || packCount <= 0) return null;
+    // A real listing whose price the search could not see is kept, without a cost.
+    // No price is ever estimated. The page link is where the patient reads it.
+    var packPrice = row.packPrice == null || row.packPrice === "" ? NaN : Number(row.packPrice);
+    var packCount = row.packCount == null || row.packCount === "" ? NaN : Number(row.packCount);
+    var priced = isFinite(packPrice) && packPrice > 0 && isFinite(packCount) && packCount > 0;
+    if (!priced) {
+      packPrice = null;
+      packCount = isFinite(packCount) && packCount > 0 ? packCount : null;
+    }
     var kind = normalizeName(row.shippingKind);
     if (kind !== "page" && kind !== "estimate" && kind !== "unstated") kind = "unstated";
     var shippingAmount = row.shippingAmount == null || row.shippingAmount === "" ? null : Number(row.shippingAmount);
@@ -206,13 +220,17 @@
     return {
       supplier: String(row.supplier || "").trim(),
       brand: String(row.brand || "").trim(),
-      ingredient: ingredientKey(row.ingredient),
+      // The model sometimes writes "levothyroxine sodium 0.05 MG Oral Tablet". Read it the same way as an
+      // RxNorm name, so only the ingredient is compared here. Strength and form are compared on their own.
+      ingredient: ingredientFromRxNorm(row.ingredient),
       salt: saltFromText(row.salt) || saltFromText(row.ingredient) || canonicalSalt(row.salt),
       strength: supplierStrength(row),
       form: normalizeForm(row.form),
       release: normalizeRelease(row.release),
       packCount: packCount,
       packPrice: packPrice,
+      priced: priced,
+      priceSource: priced ? (row.priceSource === "page" ? "page" : "search") : "",
       currency: normalizeName(row.currency).toUpperCase() || "INR",
       shippingAmount: shippingAmount,
       shippingKind: kind,
@@ -223,7 +241,7 @@
 
   function usSupply(input, row) {
     var prepared = prepareSupplier(row);
-    if (!prepared || prepared.currency !== "USD") return null;
+    if (!prepared || prepared.currency !== "USD" || !prepared.priced) return null;
     var strength = parseStrength(input && input.strength);
     var form = normalizeForm(input && input.form);
     var release = normalizeRelease(input && input.release);
@@ -264,10 +282,16 @@
       if (!row.ingredient || !expectedIngredient || row.ingredient !== ingredientKey(expectedIngredient)) {
         rowFailures.push({ rule: "ingredient", detail: "Ingredient does not agree." });
       }
-      if (expectedSalt && row.salt !== canonicalSalt(expectedSalt)) {
+      // Indian listing pages often name only the ingredient ("Atorvastatin 20 mg"). That is accepted only
+      // for an ingredient sold in a single salt form (singleSalt in catalog.js). Metoprolol is sold as
+      // succinate and as tartrate, so its listing must name the salt. A named wrong salt always fails.
+      var unstatedButSingle = !row.salt && identity && identity.singleSalt;
+      if (expectedSalt && row.salt !== canonicalSalt(expectedSalt) && !unstatedButSingle) {
         rowFailures.push({
           rule: "salt",
-          detail: "Salt form does not agree: " + (expectedSalt || "unspecified") + " is not " + (row.salt || "unspecified") + "."
+          detail: row.salt
+            ? "Salt form does not agree: " + expectedSalt + " is not " + row.salt + "."
+            : "The listing does not say which salt form it is. This medicine is sold as more than one salt, so it can't be confirmed as " + expectedSalt + "."
         });
       }
       if (!sameStrength(strength, row.strength)) {
@@ -286,7 +310,7 @@
         failures = failures.concat(rowFailures);
         return;
       }
-      row.cost = supplierCost(row);
+      row.cost = row.priced ? supplierCost(row) : null;
       accepted.push(row);
     });
 

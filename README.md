@@ -5,7 +5,7 @@
 - **Builder:** Anirudh (`asn5995`)
 - **Course:** NYU Stern, Building with AI, Fall 2026
 - **Product page:** [building-with-ai-f26.github.io/as20593-medfinder](https://building-with-ai-f26.github.io/as20593-medfinder/)
-- **App:** runs locally with `node server.js`. GitHub Pages publishes `docs/` and has no API key, so its chat offers the sample medicines only.
+- **App:** runs locally with `node server.js`. The GitHub Pages copy calls the same server hosted on Render.
 
 ## What exists today
 
@@ -13,11 +13,11 @@ The app is one chat screen: a short header, a warning line that stays visible, t
 
 It is static HTML and JavaScript, plus one Node server. There is no account system and no compile step. Confirmed prescriptions and orders stay in the browser. `migrations/` is ready for a separate development database and production database, and nothing is written there until a development URL is set.
 
-A typed drug is identified with RxNorm. `prototype/match.js` then accepts or rejects a row only when the ingredient, salt, strength, form, and release agree. `prototype/catalog.js` is the sample table used when the server has no key or no live page comes back. `server.js` asks OpenRouter for public India pharmacy listings and a US price. The key stays in `.env`.
+A typed drug is identified with RxNorm. `prototype/match.js` then accepts or rejects a row only when the ingredient, salt, strength, form, and release agree. `server.js` asks OpenRouter for public India pharmacy listings and a US price. It searches by the generic ingredient, because US brands such as Synthroid are sold under other names in India. While it checks that each listing page opens, it reads the price and pack size from the page's own product data (schema.org JSON-LD) when the pharmacy publishes it. A listing with no published price is shown as "price on seller's page". No price is estimated, and no sample price is ever shown. `prototype/catalog.js` now holds only rule data: which drugs are blocked, each ingredient's salt, and whether it is sold in a single salt form. Its product prices are used only by **Check rules**. The key stays in `.env`.
 
 Saved prescriptions, orders, and seller ratings are local records in the browser, with the decisions in plain JavaScript files the tests can run without a network call.
 
-GitHub Pages deploys from the `docs/` folder on `main`. The prototype files are copied to `docs/prototype/`. PostHog records pageviews and clicks. GitHub Pages cannot run the server, so `prototype/config.js` sends the published page's chat, prescription, supplier, and record requests to the Render service at `https://as20593-medfinder.onrender.com`. A page served by `node server.js`, locally or on Render, calls its own server. If the server cannot be reached, the page says so, offers **Try again**, and offers the sample medicines.
+GitHub Pages deploys from the `docs/` folder on `main`. The prototype files are copied to `docs/prototype/`. PostHog records pageviews and clicks. GitHub Pages cannot run the server, so `prototype/config.js` sends the published page's chat, prescription, supplier, and record requests to the Render service at `https://as20593-medfinder.onrender.com`. A page served by `node server.js`, locally or on Render, calls its own server. If the server cannot be reached, the page says so, offers **Try again**, and shows no prices.
 
 ## Public server (Render)
 
@@ -85,10 +85,10 @@ There is no separate build. `node --check` is enough to confirm a JavaScript fil
 1. **Chat.** Type "Lipitor", then "20 mg", then tap **Tablet**. RxNorm lists only the regular version, so the summary suggests it. Tap **Search**. Or type it all at once: "Toprol XL 50mg tablets once a day". Correct anything in your own words, such as "actually it's 25 mg". **Change something** and **Start over** are on every summary.
 2. **Prescription upload.** Tap the paperclip and choose a JPG, PNG, WEBP, GIF, or PDF. The bot shows what it read and asks only about what is missing. A prescription with several medicines is handled one at a time. A blurry file, a file that is not a prescription, a missing key, or a stopped server gives a message, not a guessed drug.
 3. **Refill reminder.** After a search, tap **Save & set a refill reminder**. Pick the supply length (60 days by default) and a seller, or let the ranking pick. The summary shows the refill date and a reminder 20 days before it. Say "remind me 10 days before" to change that, then tap **Save**. The reminder shows at the top of the chat and in **My meds** once it is due.
-4. **Seller rating.** In **My meds**, tap **Mark fulfilled** on an order, then tap 1 to 5 stars. A second rating on that order is refused. **Let the ranking pick** draws a seller with probability proportional to its ranking score.
+4. **Seller rating.** In **My meds**, tap **Mark fulfilled** on an order, then tap 1 to 5 stars. A second rating on that order is refused. Your sellers are ranked from your own orders and ratings, and your past rating shows next to that seller the next time a search finds it.
 5. **Things the bot refuses.** Ask "Can I take it with grapefruit juice?" and it gives a fixed refusal. Say "my cholesterol pill" and it asks for the name instead of guessing.
 
-**Load sample orders** in **My meds** replaces what this browser has saved. **Clear this browser's saved data** removes it. The demo seller history stays.
+**Clear this browser's saved data** in **My meds** removes saved medicines, orders, and ratings.
 
 ## Seller ranking
 
@@ -128,7 +128,7 @@ Email and push are not set up. There is no mail provider, no patient inbox, and 
 - The reminder lead must be a whole number of days shorter than the supply. The default is 20.
 - The same medicine name and strength share one active refill. A different strength is tracked on its own.
 - Controlled substances and insulin stay blocked. `match.js` refuses those orders.
-- After a live search, the order's seller is one of the listings the search found and verified. After a sample result, it is one of the demo sellers, ranked by their demo history plus ratings from this browser. A live seller's ratings count in the ranking only when its name matches a demo seller.
+- An order's seller is one of the listings the live search found and verified. Saving is offered only after such a result. The seller ranking uses only this browser's orders and ratings. `prototype/sellers.js` is no longer loaded by the page. It stays for the ranking tests.
 - Uploaded files are limited to about 8 MB and to JPEG, PNG, WEBP, GIF, and PDF.
 
 ## Course map
