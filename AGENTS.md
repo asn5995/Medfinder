@@ -29,7 +29,7 @@
 - **Local server:** `node server.js` listens on `127.0.0.1:8787`. On Render, where `RENDER=true`, the same process listens on `0.0.0.0` and the port Render sets. Listening only on `127.0.0.1` would make the deployed site unreachable.
 - **Database:** `migrations/001_clinic.sql` is the schema. `node scripts/migrate.js` applies new files to `DATABASE_URL` and records them in `schema_migrations`. With no URL, it does nothing. With `MEDFINDER_DATABASE=production`, it refuses to change the database. The agent uses a development URL only. The browser keeps prescriptions and orders when the database is unset.
 - **Rollback:** In the Render dashboard, open the service, then Deploys, and roll back to the previous successful deploy. Or revert the bad commit on `main` and push that revert. Do not force-push `main`. Do not roll back by deleting rows.
-- **After a deploy:** Open the production URL, confirm the prototype loads, and confirm PostHog still records a pageview. The public `phc_` key is meant to be in the page. Session replay stays enabled.
+- **After a deploy:** Open the production URL, confirm the prototype loads, and confirm PostHog still records a pageview. The public `phc_` key is meant to be in the page. Keep session replay disabled on both intake copies and the public Product Page. Use only synthetic prescription data for tests.
 
 ## 5. Ask me first
 Stop and ask Anirudh before any of these:
