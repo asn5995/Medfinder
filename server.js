@@ -285,6 +285,18 @@ function safeFile(urlPath) {
   return file;
 }
 
+// The published page on GitHub Pages calls this server from another origin.
+// Only the origins listed here may read its answers in a browser.
+var DEFAULT_ORIGINS = ["https://building-with-ai-f26.github.io"];
+var API_PATHS = ["/chat", "/extract", "/listings", "/records", "/health"];
+
+function allowedOrigins(env) {
+  var listed = String((env || process.env).ALLOWED_ORIGINS || "").split(",").map(function (item) {
+    return item.trim().replace(/\/$/, "");
+  }).filter(Boolean);
+  return DEFAULT_ORIGINS.concat(listed);
+}
+
 function listenHost(env) {
   var source = env || process.env;
   if (source.HOST) return source.HOST;
@@ -322,8 +334,32 @@ function createServer(options) {
     });
     return true;
   }
+  var origins = opts.allowedOrigins || allowedOrigins(process.env);
   return http.createServer(function (request, response) {
   var url = new URL(request.url, "http://127.0.0.1:" + PORT);
+  var origin = String(request.headers.origin || "").replace(/\/$/, "");
+  var apiPath = API_PATHS.indexOf(url.pathname) !== -1;
+  if (apiPath && origin && origins.indexOf(origin) !== -1) {
+    response.setHeader("Access-Control-Allow-Origin", origin);
+    response.setHeader("Vary", "Origin");
+  }
+  if (request.method === "OPTIONS") {
+    var preflight = apiPath && origins.indexOf(origin) !== -1;
+    response.writeHead(preflight ? 204 : 403, preflight ? {
+      "Access-Control-Allow-Methods": "GET, POST",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Max-Age": "600"
+    } : {});
+    response.end();
+    return;
+  }
+
+  // The page checks this first. On Render's free plan it also wakes a sleeping server.
+  if (request.method === "GET" && url.pathname === "/health") {
+    sendJson(response, 200, { ok: true, ready: !!process.env.OPENROUTER_API_KEY });
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/extract") {
     if (tooMany(request, response)) return;
     readBody(request, extractLimit).then(function (body) {
@@ -438,4 +474,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createServer: createServer, listenHost: listenHost };
+module.exports = { createServer: createServer, listenHost: listenHost, allowedOrigins: allowedOrigins };

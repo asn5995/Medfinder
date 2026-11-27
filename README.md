@@ -17,7 +17,16 @@ A typed drug is identified with RxNorm. `prototype/match.js` then accepts or rej
 
 Saved prescriptions, orders, and seller ratings are local records in the browser, with the decisions in plain JavaScript files the tests can run without a network call.
 
-GitHub Pages deploys from the `docs/` folder on `main`. The prototype files are copied to `docs/prototype/`. PostHog records pageviews and clicks. The published copy cannot chat, read a prescription, or list live suppliers, because it has no server and no key. It says so and offers the sample medicines, which use the sample catalog and the same match rules.
+GitHub Pages deploys from the `docs/` folder on `main`. The prototype files are copied to `docs/prototype/`. PostHog records pageviews and clicks. GitHub Pages cannot run the server, so `prototype/config.js` sends the published page's chat, prescription, supplier, and record requests to the Render service at `https://as20593-medfinder.onrender.com`. A page served by `node server.js`, locally or on Render, calls its own server. If the server cannot be reached, the page says so, offers **Try again**, and offers the sample medicines.
+
+## Public server (Render)
+
+`render.yaml` describes the service. It runs on the free plan with the same `node server.js`, and its name sets the address in `prototype/config.js`. To create it, sign in at dashboard.render.com with GitHub, choose **New → Blueprint**, and pick this repo. Paste `OPENROUTER_API_KEY` into Render's environment settings, not into the repo. Leave the database fields blank. Every push to `main` redeploys it.
+
+- The server answers browser requests only from `https://building-with-ai-f26.github.io`, plus any origins in `ALLOWED_ORIGINS`.
+- `GET /health` returns `{ ok, ready }`, where `ready` says whether the key is set. The page calls it first, which also wakes a sleeping free-plan server. That can take about a minute.
+- Set a monthly limit on the OpenRouter key. Anyone with the public link can use the chat, within the per-visitor limits.
+- To test the cross-origin path locally, start the server with `ALLOWED_ORIGINS=http://127.0.0.1:8791`, serve the repo as static files on port 8791, and open `/docs/prototype/?api=http://127.0.0.1:8787`. A page that is not local ignores `?api=`.
 
 ## Local setup
 
@@ -119,7 +128,7 @@ Email and push are not set up. There is no mail provider, no patient inbox, and 
 - The reminder lead must be a whole number of days shorter than the supply. The default is 20.
 - The same medicine name and strength share one active refill. A different strength is tracked on its own.
 - Controlled substances and insulin stay blocked. `match.js` refuses those orders.
-- The ranked sellers are the demo list, plus ratings from this browser. A live supplier row from Find equivalent is not automatically added to that list.
+- After a live search, the order's seller is one of the listings the search found and verified. After a sample result, it is one of the demo sellers, ranked by their demo history plus ratings from this browser. A live seller's ratings count in the ranking only when its name matches a demo seller.
 - Uploaded files are limited to about 8 MB and to JPEG, PNG, WEBP, GIF, and PDF.
 
 ## Course map

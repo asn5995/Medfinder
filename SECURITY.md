@@ -49,6 +49,13 @@ Checked on November 22, 2026, from this branch, before any Render or Supabase ac
 - A reply that mentions a price, a seller, a link, a match, advice, or a strength the app does not have is replaced with a fixed question. Medical advice questions get a fixed refusal, and common phrasings never reach the model.
 - Checked with `node --test` (fake model) and a live run on November 27: a bad model id and a missing key both returned a message, not a crash.
 
+## Public page calling the hosted server (added November 27, 2026)
+
+- The GitHub Pages copy sends its requests to the Render service. The key stays on that server, and `GET /health` reports only whether it is set.
+- The server answers browser requests (CORS) only from `https://building-with-ai-f26.github.io` and `ALLOWED_ORIGINS`. A request from another origin gets 403 on preflight and no `Access-Control-Allow-Origin` header. Static files get no cross-origin header. CORS does not stop scripts that are not browsers, so the per-visitor limits and the OpenRouter spending cap remain the guards on cost.
+- A public page ignores `?api=`, so a shared link cannot redirect a prescription upload to another server. Only a page on this computer accepts it, and only for an address on this computer.
+- Open: the per-visitor limit keys on the first `X-Forwarded-For` address. Behind Render's proxy, a client that sends its own header may be able to change that key. Set the OpenRouter monthly cap before sharing the public link widely.
+
 ## Still open
 
 - The public-key insert and delete has not been tried on a real database. Do that after the development project exists, and only against development.

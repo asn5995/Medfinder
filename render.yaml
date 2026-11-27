@@ -1,16 +1,18 @@
 # Render blueprint. Secret values stay in the Render dashboard, not in this file.
-# Preview environments use the same service. Point a preview at the development database only.
-# If Render asks for a paid preview add-on, stop and ask before turning it on.
+# The service name sets the public address, https://as20593-medfinder.onrender.com.
+# prototype/config.js sends the GitHub Pages copy of the app to that address, so keep them the same.
+# Preview environments for pull requests need a paid Render workspace, so they are off.
+# If Render asks for payment or a paid add-on, stop and ask before turning it on.
 
 services:
   - type: web
-    name: medfinder
+    name: as20593-medfinder
     runtime: node
     plan: free
     branch: main
     buildCommand: node scripts/migrate.js
     startCommand: node server.js
-    healthCheckPath: /prototype/
+    healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
         value: "22"
@@ -32,5 +34,4 @@ services:
         sync: false
 
 previews:
-  generation: automatic
-  expireAfterDays: 3
+  generation: off

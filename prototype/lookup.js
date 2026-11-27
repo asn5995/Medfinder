@@ -73,7 +73,7 @@
       if (local.status === "blocked" || local.status === "invalid") {
         return { kind: local.status, local: local, identity: identity };
       }
-      return fetch("/listings", {
+      return fetch(window.medfinderApi("/listings"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

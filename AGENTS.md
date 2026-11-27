@@ -24,7 +24,8 @@
 
 ## 4. Shipping
 - **Tests on every pull request:** `.github/workflows/test.yml` runs `npm audit --audit-level=high` and `node --test` on pull requests and on `main`.
-- **Preview and production:** `render.yaml` describes a free Render web service. A pull request can build a Render preview. Merging to `main` deploys production. The Render account is not connected until Anirudh says to connect it. If Render asks for a paid preview add-on, stop.
+- **Preview and production:** `render.yaml` describes a free Render web service named `as20593-medfinder`. The GitHub Pages copy of the app calls it at `https://as20593-medfinder.onrender.com`, which is set in `prototype/config.js`. Keep that name and that file the same. Merging to `main` deploys production. Pull-request previews are off, because they need a paid Render workspace. Anirudh creates the service in his own Render account. If Render asks for payment or a paid add-on, stop.
+- **Cross-origin calls:** the server answers browser requests only from `https://building-with-ai-f26.github.io` and from `ALLOWED_ORIGINS`. Do not open it to every origin.
 - **Local server:** `node server.js` listens on `127.0.0.1:8787`. On Render, where `RENDER=true`, the same process listens on `0.0.0.0` and the port Render sets. Listening only on `127.0.0.1` would make the deployed site unreachable.
 - **Database:** `migrations/001_clinic.sql` is the schema. `node scripts/migrate.js` applies new files to `DATABASE_URL` and records them in `schema_migrations`. With no URL, it does nothing. With `MEDFINDER_DATABASE=production`, it refuses to change the database. The agent uses a development URL only. The browser keeps prescriptions and orders when the database is unset.
 - **Rollback:** In the Render dashboard, open the service, then Deploys, and roll back to the previous successful deploy. Or revert the bad commit on `main` and push that revert. Do not force-push `main`. Do not roll back by deleting rows.

@@ -11,6 +11,9 @@
   var sellers = window.MedFinderSellers;
   var match = window.MedFinder;
   var lookup = window.MedFinderLookup;
+  // config.js picks the server: this one, or the Render service when the page is on GitHub Pages.
+  var api = window.medfinderApi || function (path) { return path; };
+  var remoteServer = !!window.MEDFINDER_API_BASE;
   var STORAGE_KEY = "medfinder-clinic-v1";
   var MAX_FILE = 8 * 1024 * 1024;
   var SAMPLES = [
@@ -113,7 +116,7 @@
     var copy = JSON.parse(JSON.stringify(record));
     delete copy.dataBase64;
     delete copy.file;
-    fetch("/records", {
+    fetch(api("/records"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ kind: kind, record: copy })
@@ -192,10 +195,18 @@
   // ---------- the intake conversation ----------
 
   function offlineText() {
-    var text = "The chat assistant needs the MedFinder server, and this copy of the page doesn't have one. GitHub Pages can't run it. " +
-      "You can still try a sample medicine below. Samples use the sample catalog and the same match rules.";
-    if (location.protocol === "file:") text += " To use the chat, run node server.js and open http://127.0.0.1:8787/prototype/.";
-    return text;
+    if (keyMissing) return keyMissingText();
+    if (location.protocol === "file:") {
+      return "This page was opened from a file, so it can't reach the MedFinder server. Run node server.js and open http://127.0.0.1:8787/prototype/. You can still try a sample medicine below.";
+    }
+    if (remoteServer) {
+      return "I couldn't reach the MedFinder server. It may still be starting up, which can take about a minute. Tap Try again, or try a sample medicine below. Samples use the sample catalog and the same match rules.";
+    }
+    return "The MedFinder server isn't answering. Check that node server.js is running, then tap Try again. You can still try a sample medicine below.";
+  }
+
+  function offlineChoices() {
+    return [{ label: "Try again", primary: true, onClick: function () { me("Try again"); reconnect(); } }].concat(sampleChoices());
   }
 
   function sampleChoices() {
@@ -318,8 +329,11 @@
   }
 
   function sendTurn(text) {
-    if (online === false) {
-      bot(offlineText(), sampleChoices());
+    if (online !== true) {
+      ensureServer().then(function (up) {
+        if (up) sendTurn(text);
+        else bot(offlineText(), offlineChoices());
+      });
       return;
     }
     var fresh = session.mode === "after_search" || session.mode === "done";
@@ -327,7 +341,7 @@
     session.history.push({ role: "user", content: text });
     setBusy(true);
     var done = typing();
-    fetch("/chat", {
+    fetch(api("/chat"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages: session.history.slice(-12), draft: session.draft, asked: session.asked })
@@ -370,7 +384,7 @@
       setBusy(false);
       session.history.pop();
       online = false;
-      bot(offlineText(), sampleChoices());
+      bot(offlineText(), offlineChoices());
     });
   }
 
@@ -412,15 +426,22 @@
       bot("That file is too large. Upload a photo or PDF under 8 MB.");
       return;
     }
-    if (online === false) {
-      bot("Reading a prescription needs the MedFinder server, which isn't running for this page.", sampleChoices());
+    if (online !== true) {
+      ensureServer().then(function (up) {
+        if (up) sendFile(file);
+        else bot(offlineText(), offlineChoices());
+      });
       return;
     }
+    sendFile(file);
+  }
+
+  function sendFile(file) {
     setBusy(true);
     var done = typing("Reading the prescription…");
     track("clicked_read_prescription", { type: file.type || "" });
     fileToPayload(file).then(function (payload) {
-      return fetch("/extract", {
+      return fetch(api("/extract"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -448,7 +469,7 @@
       done();
       setBusy(false);
       online = false;
-      bot("The MedFinder server isn't reachable, so the file could not be read.", sampleChoices());
+      bot("I couldn't reach the MedFinder server, so the file could not be read. " + offlineText(), offlineChoices());
     });
   }
 
@@ -585,6 +606,7 @@
       setBusy(false);
       track("showed_result", { status: result.kind, rxcui: result.identity && result.identity.rxcui ? result.identity.rxcui : "" });
       session.history.push({ role: "assistant", content: "Search finished for " + medLabel(request) + "." });
+      session.lastResult = result;
       card(resultCard(result));
       afterSearch(result);
     });
@@ -653,19 +675,45 @@
     askSeller();
   }
 
+  // The sellers the live search found and match.js verified, cheapest first.
+  function liveSellers() {
+    var result = session.lastResult;
+    if (!result || result.kind !== "suppliers") return [];
+    return result.filtered.suppliers.slice().sort(function (a, b) { return a.cost.landed - b.cost.landed; }).map(function (row) {
+      var name = row.supplier || "Supplier";
+      // A live seller with the same name as a seller in the ranking keeps that seller's record.
+      var known = sellers.list().filter(function (seller) { return seller.name.toLowerCase() === name.toLowerCase(); })[0];
+      return {
+        id: known ? known.id : "live-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+        name: name,
+        pageUrl: row.pageUrl,
+        label: name + " · " + formatAmount(row.cost.landed, row.currency) + " for 90 days"
+      };
+    });
+  }
+
   function askSeller() {
     session.mode = "save_seller";
+    var live = liveSellers();
+    if (live.length) {
+      bot("Which seller should this order go to? These are the listings the search found and verified, cheapest first.", live.map(function (seller) {
+        return { label: seller.label, onClick: function () { me(seller.label); setSeller(seller.id, seller.name, seller.pageUrl); } };
+      }));
+      return;
+    }
     var top = rankedSellers().slice(0, 3);
     var choices = [{ label: "Let the ranking pick", primary: true, onClick: function () { me("Let the ranking pick"); setSeller(""); } }];
     top.forEach(function (seller) {
       var label = seller.name + " · " + seller.ratingAverage.toFixed(1) + "★";
       choices.push({ label: label, onClick: function () { me(label); setSeller(seller.id); } });
     });
-    bot("Which seller should this order go to? Sellers are ranked by smoothed ratings and fulfillment. These sellers and reviews are demo data.", choices);
+    bot("Which seller should this order go to? This result came from the sample catalog, so these are the demo sellers, ranked by smoothed ratings and fulfillment.", choices);
   }
 
-  function setSeller(id) {
+  function setSeller(id, name, pageUrl) {
     session.save.sellerId = id;
+    session.save.sellerName = name || (id ? sellerName(id) : "");
+    session.save.sellerUrl = pageUrl || "";
     showSaveSummary();
   }
 
@@ -689,9 +737,19 @@
       { label: "Supply", value: plan.supplyDays + " days from today" },
       { label: "Next refill", value: niceDate(plan.refillDueOn) },
       { label: "Reminder", value: niceDate(plan.reminderOn) + " (" + plan.leadDays + " days before)" },
-      { label: "Seller", value: session.save.sellerId ? sellerName(session.save.sellerId) : "Chosen by the ranking when you save" }
+      { label: "Seller", value: session.save.sellerName || "Chosen by the ranking when you save" }
     ]));
-    box.appendChild(el("p", "hint", "Saved in this browser only. MedFinder doesn't take payment or ship medicine. To change the reminder, say something like \"remind me 10 days before\"."));
+    if (session.save.sellerUrl) {
+      var link = el("a", "", "Open " + session.save.sellerName + "'s page");
+      link.href = session.save.sellerUrl;
+      link.target = "_blank";
+      link.rel = "noopener";
+      var linkRow = el("p");
+      linkRow.appendChild(link);
+      box.appendChild(linkRow);
+    }
+    box.appendChild(el("p", "hint", "Saved in this browser only. MedFinder doesn't take payment or ship medicine" +
+      (session.save.sellerUrl ? ", so you order on the seller's page" : "") + ". To change the reminder, say something like \"remind me 10 days before\"."));
     card(box, [
       { label: "Save", primary: true, onClick: function () { me("Save"); saveNow(); } },
       { label: "Cancel", onClick: function () { me("Cancel"); cancelSave(); } }
@@ -728,7 +786,7 @@
       orderedAt: today,
       prescriptionId: saved.prescription.id,
       sellerId: session.save.sellerId || "",
-      sellerName: session.save.sellerId ? sellerName(session.save.sellerId) : ""
+      sellerName: session.save.sellerName || ""
     }), {
       sellers: clinic.projectSellers(sellers.list(), state.orders),
       random: Math.random,
@@ -772,6 +830,13 @@
     }
     if (mode === "save_seller") {
       var lower = text.toLowerCase();
+      var live = liveSellers();
+      if (live.length) {
+        var pick = live.filter(function (seller) { return lower.indexOf(seller.name.toLowerCase()) !== -1; })[0];
+        if (!pick && /cheap|lowest|first|any|you choose|don'?t care|whatever/i.test(text)) pick = live[0];
+        if (pick) return setSeller(pick.id, pick.name, pick.pageUrl);
+        return askSeller();
+      }
       var found = rankedSellers().filter(function (seller) { return lower.indexOf(seller.name.toLowerCase()) !== -1; })[0];
       if (found) return setSeller(found.id);
       if (/rank|pick|any|you choose|don'?t care|whatever|default/i.test(text)) return setSeller("");
@@ -959,11 +1024,61 @@
 
   // ---------- start ----------
 
+  // Asks the server whether it is up and has its OpenRouter key. Render's free plan puts an idle
+  // server to sleep, and the first request wakes it, which can take about a minute.
+  var keyMissing = false;
   function probeServer() {
     if (location.protocol === "file:") return Promise.resolve(false);
-    return fetch("/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).then(function (response) {
-      return response.json().then(function (body) { return !!body && typeof body.ok === "boolean"; });
-    }).catch(function () { return false; });
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timer = setTimeout(function () { if (controller) controller.abort(); }, 90000);
+    var waking = null;
+    var wakeTimer = setTimeout(function () {
+      waking = typing("Waking up the MedFinder server… On the free plan this can take up to a minute.");
+    }, 2500);
+    return fetch(api("/health"), { signal: controller ? controller.signal : undefined }).then(function (response) {
+      return response.json();
+    }).then(function (body) {
+      keyMissing = !!body && body.ok === true && body.ready === false;
+      return !!body && body.ok === true && body.ready === true;
+    }).catch(function () {
+      return false;
+    }).then(function (up) {
+      clearTimeout(timer);
+      clearTimeout(wakeTimer);
+      if (waking) waking();
+      return up;
+    });
+  }
+
+  var probing = null;
+  function ensureServer() {
+    if (online === true) return Promise.resolve(true);
+    if (!probing) {
+      setBusy(true);
+      probing = probeServer().then(function (up) {
+        online = up;
+        probing = null;
+        setBusy(false);
+        return up;
+      });
+    }
+    return probing;
+  }
+
+  function greet() {
+    bot("Hi! I'll help you check whether your long-term medicine has an exact equivalent sold in India, and what a 90-day supply would cost.");
+    askField("name");
+  }
+
+  function reconnect() {
+    ensureServer().then(function (up) {
+      if (up) return askField("name");
+      bot(keyMissing ? keyMissingText() : offlineText(), offlineChoices());
+    });
+  }
+
+  function keyMissingText() {
+    return "The MedFinder server is running, but its OpenRouter key isn't set, so the chat and prescription reading are off. You can still try a sample medicine below.";
   }
 
   function start() {
@@ -974,8 +1089,7 @@
         { label: "Open My meds", keep: true, onClick: openPanel }
       ]);
     }
-    probeServer().then(function (up) {
-      online = up;
+    ensureServer().then(function (up) {
       var params = new URLSearchParams(location.search);
       if (params.get("checks") === "1") {
         document.getElementById("open-about").click();
@@ -988,11 +1102,10 @@
         return;
       }
       if (!up) {
-        bot(offlineText(), sampleChoices());
+        bot(keyMissing ? keyMissingText() : offlineText(), offlineChoices());
         return;
       }
-      bot("Hi! I'll help you check whether your long-term medicine has an exact equivalent sold in India, and what a 90-day supply would cost.");
-      askField("name");
+      greet();
     });
   }
 
